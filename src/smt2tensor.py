@@ -175,7 +175,7 @@ class myTensor(object):
         return y
 
     def __lt(self, node):
-        return self._le(node)
+        return self.__le(node)
 
     def __ite(self, node):       # if( iff ) then  left  else  right
         raise Smtworkerror("qwq")
