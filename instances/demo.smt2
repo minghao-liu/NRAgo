@@ -1,0 +1,8 @@
+(set-info :smt-lib-version v2.6)
+(set-logic QF_NRA)
+(declare-const x0 Real)
+(declare-const x1 Real)
+(declare-const x2 Real)
+(assert (= (- (+ (* x0 x0 x0) (* x1 x1 x1)) (* x1 x2)) 0))
+(check-sat)
+(exit)

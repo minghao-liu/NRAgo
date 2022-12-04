@@ -1,9 +1,10 @@
-from pysmt.shortcuts import Symbol, And, GE, LT, Plus, Equals, Int, get_model
-from pysmt.typing import INT
 from pysmt.smtlib.parser import SmtLibParser
+import pysmt.smtlib.commands as smtcmd
 import argparse
 import torch
+from smt2tensor import myTensor
 
+from six.moves import cStringIO
 
 def parse_args():
     arg_parser = argparse.ArgumentParser(description='SMT_GD')
@@ -20,11 +21,32 @@ def get_smt_script(path):
 
 
 def generate_init_solution(script):
-    script
+    mytensor = myTensor()
+    for cmd in script:
+        if cmd.name in [smtcmd.DECLARE_FUN, smtcmd.DECLARE_CONST]:
+            symbol = cmd.args[0]
+            mytensor.parse_declare(symbol)
+        elif cmd.name == smtcmd.ASSERT:
+            node = cmd.args[0]
+            mytensor.parse_assert(node)
+
+    mytensor.init_tensor()
+    optimizer = torch.optim.Adam([mytensor.tensor_args], lr=1e-3)
+    for step in range(30000):
+        y = mytensor.sol()
+        if(step%1000 == 0):
+            mytensor.print_args("step:%d"%(step))
+            print(y.item())
+            print()
+        optimizer.zero_grad() 
+        y.backward()
+        optimizer.step()
+
 
 
 def solve(script):
     init_sol = generate_init_solution(script)
+    
 
 
 if __name__ == "__main__":
