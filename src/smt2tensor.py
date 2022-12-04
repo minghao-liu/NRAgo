@@ -32,6 +32,7 @@ class Smtworkerror(RuntimeError):
         self.args = arg
         
 class myTensor(object):
+    acc_eps = 1e-5
     def __init__(self):
         self.args = []               # 将tensor变量储存到数组
         self.names = []              # 变量名
@@ -86,19 +87,54 @@ class myTensor(object):
         raise Smtworkerror("qwq")
 
     def __and(self, node):
-        raise Smtworkerror("qwq")
+        args = node.args()
+        y = None
+        for arg in args:
+            if y is None:
+                y = self.sol_node(arg)
+            else:
+                y = torch.max(y, self.sol_node(arg))
+        return y
 
     def __or(self, node):
-        raise Smtworkerror("qwq")
+        args = node.args()
+        y = None
+        for arg in args:
+            if y is None:
+                y = self.sol_node(arg)
+            else:
+                y = torch.min(y, self.sol_node(arg))
+        return y
 
     def __not(self, node):
-        raise Smtworkerror("qwq")
+        y = -self.sol_node(node.arg(0))
+        return y
 
     def __implies(self, node):       # left -> right
-        raise Smtworkerror("qwq")
+        args = node.args()
+        _a = self.sol_node(args[0])
+        _b = self.sol_node(args[1])
+        if _a < self.acc_eps:
+            return _b
+        else:
+            y = -_a
+            return y
 
     def __iff(self, node):           # left <-> right
-        raise Smtworkerror("qwq")
+        args = node.args()
+        _a = self.sol_node(args[0])
+        _b = self.sol_node(args[1])
+        if _a < self.acc_eps:
+            if _b < self.acc_eps:
+                y = _a + _b
+            else:
+                y = _b - _a
+        else:
+            if _b < self.acc_eps:
+                y = _a - _b
+            else:
+                y = -_b - _a
+        return y
 
     def __plus(self, node):
         args = node.args()
