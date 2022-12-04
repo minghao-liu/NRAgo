@@ -4,5 +4,6 @@
 (declare-const x1 Real)
 (declare-const x2 Real)
 (assert (= (- (+ (* x0 x0 x0) (* x1 x1 x1)) (* x1 x2)) 0))
+(assert (let ((?a1 (+ x1 0)) (?a2 (+ x2 0))) (= ?a1 ?a2)))
 (check-sat)
 (exit)

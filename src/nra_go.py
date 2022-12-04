@@ -4,7 +4,6 @@ import argparse
 import torch
 from smt2tensor import myTensor
 
-from six.moves import cStringIO
 
 def parse_args():
     arg_parser = argparse.ArgumentParser(description='SMT_GD')

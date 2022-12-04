@@ -187,7 +187,7 @@ class myTensor(object):
     def sol_node(self, node):
         if node.is_constant():          # 常量
             x = node.constant_value()   # gmpy2类型
-            return float(x)
+            return torch.tensor([float(x)], requires_grad=True)
         elif node.is_symbol():          # 符号
             tid = self.namemap[node.symbol_name()]
             return self.tensor_args[tid]
