@@ -19,6 +19,11 @@ def get_smt_script(path):
         script_get = smt_parser.get_script(fp)
     return script_get
 
+def adjust_learning_rate(optimizer, epoch, lr):
+    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
+    lr = lr * (0.5 ** (epoch // 200))
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
 def generate_init_solution(script):
     mytensor = myTensor()
@@ -31,10 +36,13 @@ def generate_init_solution(script):
             mytensor.parse_assert(node)
 
     mytensor.init_tensor()
-    optimizer = torch.optim.Adam([mytensor.tensor_args], lr=1e-3)
-    for step in range(30000):
+    epochs = 1000
+    Lr = 0.1
+    optimizer = torch.optim.Adam([mytensor.tensor_args], lr = Lr)
+    for step in range(epochs):
+        # adjust_learning_rate(optimizer, step, Lr)
         y = mytensor.sol()
-        if(step%1000 == 0):
+        if(step%100 == 0):
             mytensor.print_args("step:%d"%(step))
             print(y.item())
             print()

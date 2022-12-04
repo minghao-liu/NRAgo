@@ -32,7 +32,7 @@ class Smtworkerror(RuntimeError):
         self.args = arg
         
 class myTensor(object):
-    acc_eps = 1e-5
+    acc_eps = 0
     def __init__(self):
         self.args = []               # 将tensor变量储存到数组
         self.names = []              # 变量名
@@ -88,12 +88,11 @@ class myTensor(object):
 
     def __and(self, node):
         args = node.args()
-        y = None
+        y = torch.tensor([0.0], requires_grad=True)
         for arg in args:
-            if y is None:
-                y = self.sol_node(arg)
-            else:
-                y = torch.max(y, self.sol_node(arg))
+            x = self.sol_node(arg)
+            if x > 0:
+                y = y + x
         return y
 
     def __or(self, node):
@@ -164,7 +163,11 @@ class myTensor(object):
         args = node.args()
         _a = self.sol_node(args[0])
         _b = self.sol_node(args[1])
-        y = (_a - _b) * (_a - _b)
+        # y = (_a - _b) * (_a - _b)
+        if _a > _b:
+            y = (_a - _b)
+        else:
+            y = (_b - _a)
         return y
 
     def __le(self, node):
@@ -200,7 +203,8 @@ class myTensor(object):
         y = torch.tensor([0.0], requires_grad=True)
         for node in self.nodes:
             x = self.sol_node(node)
-            y = y + x*x                    # amm how to do?
+            if x > 0:
+                y = y + x
 
         return y
 
