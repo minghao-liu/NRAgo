@@ -3,7 +3,7 @@ import pysmt.smtlib.commands as smtcmd
 import argparse
 import torch
 from smt2tensor import myTensor
-
+import time
 
 def parse_args():
     arg_parser = argparse.ArgumentParser(description='SMT_GD')
@@ -39,15 +39,23 @@ def generate_init_solution(script):
     Lr = 0.1
     optimizer = torch.optim.Adam([mytensor.tensor_args], lr = Lr)
     for step in range(epochs):
+        T1=time.process_time()
         # adjust_learning_rate(optimizer, step, Lr)
         y = mytensor.sol()
         if(step%100 == 0):
             mytensor.print_args("step:%d"%(step))
             print(y.item())
             print()
+
+        # T2 =time.process_time()
+        # # print('程序运行时间1:%s毫秒' % ((T2 - T1)*1000))
+        # T1=time.process_time()
         optimizer.zero_grad() 
         y.backward()
         optimizer.step()
+
+        T2 =time.process_time()
+        print('程序运行时间2:%s毫秒' % ((T2 - T1)*1000))
 
 
 

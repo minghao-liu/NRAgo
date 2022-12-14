@@ -88,11 +88,17 @@ class myTensor(object):
 
     def __and(self, node):
         args = node.args()
-        y = torch.tensor([0.0], requires_grad=True)
+        y = None
         for arg in args:
             x = self.sol_node(arg)
-            if x > 0:
+            if x <= 0:
+                continue
+            if y is None:
+                y = x
+            else:
                 y = y + x
+        if y is None:
+            y = torch.tensor([0.0], requires_grad=True)
         return y
 
     def __or(self, node):
@@ -106,8 +112,7 @@ class myTensor(object):
         return y
 
     def __not(self, node):
-        y = -self.sol_node(node.arg(0))
-        return y
+        return -self.sol_node(node.arg(0))
 
     def __implies(self, node):       # left -> right
         args = node.args()
@@ -116,8 +121,7 @@ class myTensor(object):
         if _a < self.acc_eps:
             return _b
         else:
-            y = -_a
-            return y
+            return -_a
 
     def __iff(self, node):           # left <-> right
         args = node.args()
@@ -125,57 +129,57 @@ class myTensor(object):
         _b = self.sol_node(args[1])
         if _a < self.acc_eps:
             if _b < self.acc_eps:
-                y = _a + _b
+                return _a + _b
             else:
-                y = _b - _a
+                return _b - _a
         else:
             if _b < self.acc_eps:
-                y = _a - _b
+                return _a - _b
             else:
-                y = -_b - _a
-        return y
+                return -_b - _a
 
     def __plus(self, node):
         args = node.args()
-        y = torch.tensor([0.0], requires_grad=True)
+        y = None
         for arg in args:
-            y = y + self.sol_node(arg)
+            if y is None:
+                y = self.sol_node(arg)
+            else:
+                y = y + self.sol_node(arg)
         return y
 
     def __minus(self, node):
         args = node.args()
-        y = self.sol_node(args[0]) - self.sol_node(args[1])
-        return y
+        return self.sol_node(args[0]) - self.sol_node(args[1])
 
     def __times(self, node):
         args = node.args()
-        y = torch.tensor([1.0], requires_grad=True)
+        y = None
         for arg in args:
-            y = y * self.sol_node(arg)
+            if y is None:
+                y = self.sol_node(arg)
+            else:
+                y = y * self.sol_node(arg)
         return y
 
     def __div(self, node):
         args = node.args()
-        y = self.sol_node(args[0]) / self.sol_node(args[1])
-        return y
+        return self.sol_node(args[0]) / self.sol_node(args[1])
 
     def __equals(self, node):
         args = node.args()
         _a = self.sol_node(args[0])
         _b = self.sol_node(args[1])
-        # y = (_a - _b) * (_a - _b)
         if _a > _b:
-            y = (_a - _b)
+            return _a - _b
         else:
-            y = (_b - _a)
-        return y
+            return _b - _a
 
     def __le(self, node):
         args = node.args()
         _a = self.sol_node(args[0])
         _b = self.sol_node(args[1])
-        y = (_a - _b)
-        return y
+        return _a - _b
 
     def __lt(self, node):
         return self.__le(node)
@@ -187,7 +191,7 @@ class myTensor(object):
     def sol_node(self, node):
         if node.is_constant():          # 常量
             x = node.constant_value()   # gmpy2类型
-            return torch.tensor([float(x)], requires_grad=True)
+            return float(x)
         elif node.is_symbol():          # 符号
             tid = self.namemap[node.symbol_name()]
             return self.tensor_args[tid]
