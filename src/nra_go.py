@@ -47,15 +47,15 @@ def generate_init_solution(script):
             print(y.item())
             print()
 
-        # T2 =time.process_time()
-        # # print('程序运行时间1:%s毫秒' % ((T2 - T1)*1000))
-        # T1=time.process_time()
+        T2 =time.process_time()
+        print('程序运行时间1:%s毫秒' % ((T2 - T1)*1000))
+        T1=time.process_time()
         optimizer.zero_grad() 
         y.backward()
         optimizer.step()
 
         T2 =time.process_time()
-        print('程序运行时间2:%s毫秒' % ((T2 - T1)*1000))
+        print('程序运行时间2:%d毫秒' % ((T2 - T1)*1000))
 
 
 
