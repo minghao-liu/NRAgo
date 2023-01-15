@@ -51,7 +51,7 @@ def generate_init_solution(script):
     Lr = 0.1
     optimizer = torch.optim.Adam([mytensor.tensor_args], lr=Lr)
     for step in range(epochs):
-        T1 = time.process_time()
+        # T1 = time.process_time()
         # adjust_learning_rate(optimizer, step, Lr)
         y = mytensor.sol()
 
