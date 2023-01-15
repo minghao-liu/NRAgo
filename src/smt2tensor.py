@@ -29,7 +29,7 @@ import random
 
 class Smtworkerror(RuntimeError):
     def __init__(self, arg):
-        self.args = arg
+        self.args = [arg]
         
 class myTensor(object):
     acc_eps = 0
