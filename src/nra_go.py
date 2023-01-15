@@ -82,7 +82,6 @@ def solve(path):
 
     formula = get_smt_formula(path)
     with Solver(name="z3", logic=smt_logic) as s:
-        s.z3.add_soft()
         s.add_assertion(formula)
         res = s.solve()
         print(res)
