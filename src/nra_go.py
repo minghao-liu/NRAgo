@@ -30,9 +30,11 @@ def get_smt_formula(path):
 
 def adjust_learning_rate(optimizer, epoch, lr):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    lr = lr * (0.5 ** (epoch // 200))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+
+    if (epoch % 50 == 0) and (epoch > 0):
+        lr = lr * (0.6 ** (epoch // 50))
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
 
 
 def generate_init_solution(script):
@@ -47,26 +49,30 @@ def generate_init_solution(script):
             mytensor.parse_assert(node)
 
     mytensor.init_tensor()
-    epochs = 1000
-    Lr = 0.1
+    epochs = 600
+    Lr = 0.5
     optimizer = torch.optim.Adam([mytensor.tensor_args], lr=Lr)
     for step in range(epochs):
         # T1 = time.process_time()
-        # adjust_learning_rate(optimizer, step, Lr)
+        adjust_learning_rate(optimizer, step, Lr)
+        optimizer.zero_grad()
         y = mytensor.sol()
 
         for i in range(mytensor.arg_cnt):
             init_sol[mytensor.names[i]] = mytensor.tensor_args[i].item()
 
-        if(step % 100 == 0):
+        if(y == 0):
+            break
+
+        if(step % 50 == 0):
             mytensor.print_args("step:%d" % (step))
             print(y.item())
+            print("step:%d" % (step))
             print()
 
         # T2 =time.process_time()
         # print('程序运行时间1:%s毫秒' % ((T2 - T1)*1000))
         # T1=time.process_time()
-        optimizer.zero_grad()
         y.backward()
         optimizer.step()
 
