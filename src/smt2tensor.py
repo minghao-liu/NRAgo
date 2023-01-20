@@ -125,7 +125,6 @@ class myTensor(object):
         for node in self.nodes:
             self.task_graph[0][0][2].append(self.init_graph(node, 1))
 
-
     def __forall(self, node):
         raise Smtworkerror("qwq")
 
@@ -243,7 +242,6 @@ class myTensor(object):
         for i in range(l):
             self.tensor_args[i] = self.vars[i]
 
-
     def sol(self):
         for layer in reversed(self.task_graph):
             for oper in layer:
@@ -255,5 +253,6 @@ class myTensor(object):
     def print_args(self, mss=None):
         if mss:
             print(mss)
-        for i in range(self.arg_cnt):
-            print(self.names[i], ":", self.tensor_args[i].item())
+        l = len(self.names)
+        for i in range(l):
+            print(self.names[i], ":", self.vars[i].item())

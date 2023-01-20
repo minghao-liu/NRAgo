@@ -60,7 +60,7 @@ def generate_init_solution(script):
         y = mytensor.sol()
 
         for name in mytensor.names:
-            init_sol[] = mytensor.var[i].item()
+            init_sol[name] = mytensor.vars[mytensor.namemap[name][0]].item()
 
         if torch.equal(y, torch.tensor([0.0], requires_grad=True)):
             break
