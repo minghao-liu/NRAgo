@@ -47,8 +47,9 @@ def generate_init_solution(script):
         elif cmd.name == smtcmd.ASSERT:
             node = cmd.args[0]
             mytensor.parse_assert(node)
-
     mytensor.init_tensor()
+
+    mytensor.init_val()
     epochs = 600
     Lr = 0.5
     optimizer = torch.optim.Adam([mytensor.tensor_args], lr=Lr)
