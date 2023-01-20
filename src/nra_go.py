@@ -62,7 +62,7 @@ def generate_init_solution(script):
         for name in mytensor.names:
             init_sol[name] = mytensor.vars[mytensor.namemap[name][0]].item()
 
-        if torch.equal(y, torch.tensor([0.0], requires_grad=True)):
+        if y <= 0:
             break
 
         if(step % 50 == 0):
@@ -71,13 +71,13 @@ def generate_init_solution(script):
             print("step:%d" % (step))
             print()
 
-        T2 =time.process_time()
+        T2 = time.process_time()
         print('程序运行时间1:%s毫秒' % ((T2 - T1)*1000))
-        T1=time.process_time()
+        T1 = time.process_time()
         y.backward()
         optimizer.step()
 
-        T2 =time.process_time()
+        T2 = time.process_time()
         print('程序运行时间2:%d毫秒' % ((T2 - T1)*1000))
 
     return init_sol
