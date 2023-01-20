@@ -52,15 +52,15 @@ def generate_init_solution(script):
     mytensor.init_val()
     epochs = 600
     Lr = 0.5
-    optimizer = torch.optim.Adam([mytensor.tensor_args], lr=Lr)
+    optimizer = torch.optim.Adam([mytensor.vars], lr=Lr)
     for step in range(epochs):
         # T1 = time.process_time()
         adjust_learning_rate(optimizer, step, Lr)
         optimizer.zero_grad()
         y = mytensor.sol()
 
-        for i in range(mytensor.arg_cnt):
-            init_sol[mytensor.names[i]] = mytensor.tensor_args[i].item()
+        for name in mytensor.names:
+            init_sol[] = mytensor.var[i].item()
 
         if torch.equal(y, torch.tensor([0.0], requires_grad=True)):
             break

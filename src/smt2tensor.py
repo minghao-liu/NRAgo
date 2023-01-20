@@ -230,13 +230,19 @@ class myTensor(object):
         raise Smtworkerror("qwq")
 
     def init_val(self):
+        tmp_list = []
         for name in self.names:
             nid = self.namemap[name][0]
             if self.namemap[name][1]:   # REAL
                 val = 0.15 - random.random()*0.1
             else:
                 val = 0.1 - random.random()*0.2
-            self.tensor_args[nid] = 
+            tmp_list.append(val)
+        self.vars = torch.tensor(tmp_list, requires_grad=True)
+        l = len(tmp_list)
+        for i in range(l):
+            self.tensor_args[i] = self.vars[i]
+
 
     def sol(self):
         for layer in reversed(self.task_graph):
