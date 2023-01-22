@@ -3,27 +3,7 @@ from pysmt.operators import (FORALL, EXISTS, AND, OR, NOT, IMPLIES, IFF,
                              REAL_CONSTANT, BOOL_CONSTANT, INT_CONSTANT,
                              PLUS, MINUS, TIMES, DIV,
                              LE, LT, EQUALS,
-                             ITE,
-                             TOREAL,
-                             BV_CONSTANT, BV_NOT, BV_AND, BV_OR, BV_XOR,
-                             BV_CONCAT, BV_EXTRACT,
-                             BV_ULT, BV_ULE, BV_NEG, BV_ADD, BV_SUB,
-                             BV_MUL, BV_UDIV, BV_UREM,
-                             BV_LSHL, BV_LSHR,
-                             BV_ROL, BV_ROR,
-                             BV_ZEXT, BV_SEXT,
-                             BV_SLT, BV_SLE,
-                             BV_COMP,
-                             BV_SDIV, BV_SREM,
-                             BV_ASHR,
-                             STR_CONSTANT,
-                             STR_LENGTH, STR_CONCAT, STR_CONTAINS,
-                             STR_INDEXOF, STR_REPLACE, STR_SUBSTR,
-                             STR_PREFIXOF, STR_SUFFIXOF,
-                             STR_TO_INT, INT_TO_STR,
-                             STR_CHARAT,
-                             ARRAY_SELECT, ARRAY_STORE, ARRAY_VALUE,
-                             ALGEBRAIC_CONSTANT)
+                             ITE)
 import torch
 import random
 

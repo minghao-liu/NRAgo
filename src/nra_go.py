@@ -37,8 +37,7 @@ def adjust_learning_rate(optimizer, epoch, lr):
             param_group['lr'] = lr
 
 
-def generate_init_solution(script):
-    init_sol = {}
+def init_tensor(script):
     mytensor = myTensor()
     for cmd in script:
         if cmd.name in [smtcmd.DECLARE_FUN, smtcmd.DECLARE_CONST]:
@@ -48,7 +47,11 @@ def generate_init_solution(script):
             node = cmd.args[0]
             mytensor.parse_assert(node)
     mytensor.init_tensor()
+    return mytensor
 
+
+def generate_init_solution(mytensor):
+    init_result = {}
     mytensor.init_val()
     epochs = 600
     Lr = 0.5
@@ -60,7 +63,7 @@ def generate_init_solution(script):
         y = mytensor.sol()
 
         for name in mytensor.names:
-            init_sol[name] = mytensor.vars[mytensor.namemap[name][0]].item()
+            init_result[name] = mytensor.vars[mytensor.namemap[name][0]].item()
 
         if y <= 0:
             break
@@ -80,13 +83,14 @@ def generate_init_solution(script):
         T2 = time.process_time()
         print('程序运行时间2:%d毫秒' % ((T2 - T1)*1000))
 
-    return init_sol
+    return init_result
 
 
 def solve(path):
     script, smt_logic = get_smt_script(path)
-    init_sol = generate_init_solution(script)
-
+    mytensor = init_tensor(script)
+    init_result = generate_init_solution(mytensor)
+    
     formula = get_smt_formula(path)
     with Solver(name="z3", logic=smt_logic) as s:
         s.add_assertion(formula)
