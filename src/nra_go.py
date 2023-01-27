@@ -4,6 +4,7 @@ from pysmt.shortcuts import Solver
 import argparse
 import torch
 from smt2tensor import myTensor
+import z3
 import time
 
 
@@ -69,19 +70,19 @@ def generate_init_solution(mytensor):
             break
 
         if(step % 50 == 0):
-            mytensor.print_args("step:%d" % (step))
-            print(y.item())
+            # mytensor.print_args("step:%d" % (step))
+            # print(y.item())
             print("step:%d" % (step))
             print()
 
         T2 = time.process_time()
-        print('程序运行时间1:%s毫秒' % ((T2 - T1)*1000))
+        # print('程序运行时间1:%s毫秒' % ((T2 - T1)*1000))
         T1 = time.process_time()
         y.backward()
         optimizer.step()
 
         T2 = time.process_time()
-        print('程序运行时间2:%d毫秒' % ((T2 - T1)*1000))
+        # print('程序运行时间2:%d毫秒' % ((T2 - T1)*1000))
 
     return init_result
 
@@ -90,14 +91,32 @@ def solve(path):
     script, smt_logic = get_smt_script(path)
     mytensor = init_tensor(script)
     init_result = generate_init_solution(mytensor)
-    
+
+    T1 = time.process_time()
     formula = get_smt_formula(path)
     with Solver(name="z3", logic=smt_logic) as s:
+        s.z3.push()
+        for key, value in init_result.items():
+            if mytensor.namemap[key][1]:        # Real
+                s.z3.add(z3.Real(key) == value)
+            else:                              # Bool
+                if value > 0:
+                    s.z3.add(z3.Bool(key))
+                else:
+                    s.z3.add(z3.Not(z3.Bool(key)))
+
+        res = s.z3.check()
+        s.z3.pop()
+        
         s.add_assertion(formula)
-        res = s.solve()
+
+        res = s.z3.check()
         print(res)
-        if(res == True):
-            print(s.get_model())
+        # print(s.z3.assertions())
+        # if(res == z3.sat):
+            # print(s.z3.model())
+        T2 = time.process_time()
+        print('程序运行时间2:%d毫秒' % ((T2 - T1)*1000))
 
 
 if __name__ == "__main__":
