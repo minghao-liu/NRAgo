@@ -115,8 +115,9 @@ def solve(path):
         # print(s.z3.assertions())
         # if(res == z3.sat):
             # print(s.z3.model())
+
         T2 = time.process_time()
-        print('程序运行时间2:%d毫秒' % ((T2 - T1)*1000))
+        print('Z3运行时间:%d毫秒' % ((T2 - T1)*1000))
 
 
 if __name__ == "__main__":
