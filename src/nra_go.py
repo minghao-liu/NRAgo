@@ -107,14 +107,14 @@ def solve(path):
 
         res = s.z3.check()
         s.z3.pop()
-        
+
         s.add_assertion(formula)
 
         res = s.z3.check()
         print(res)
         # print(s.z3.assertions())
         # if(res == z3.sat):
-            # print(s.z3.model())
+        # print(s.z3.model())
 
         T2 = time.process_time()
         print('Z3运行时间:%d毫秒' % ((T2 - T1)*1000))
