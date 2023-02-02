@@ -33,7 +33,7 @@ def adjust_learning_rate(optimizer, epoch, lr):
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
 
     if (epoch % 50 == 0) and (epoch > 0):
-        lr = lr * (0.6 ** (epoch // 50))
+        lr = lr * (0.5 ** (epoch // 50))
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
@@ -70,9 +70,8 @@ def generate_init_solution(mytensor):
             break
 
         if(step % 50 == 0):
-            # mytensor.print_args("step:%d" % (step))
-            # print(y.item())
             print("step:%d" % (step))
+            print(y.item())
             print()
 
         T2 = time.process_time()
@@ -89,23 +88,28 @@ def generate_init_solution(mytensor):
 
 def solve(path):
     script, smt_logic = get_smt_script(path)
+
+    T1 = time.process_time()
     mytensor = init_tensor(script)
     init_result = generate_init_solution(mytensor)
+
+    T2 = time.process_time()
+    print('pytorch运行时间:%d毫秒' % ((T2 - T1)*1000))
 
     T1 = time.process_time()
     formula = get_smt_formula(path)
     with Solver(name="z3", logic=smt_logic) as s:
         s.z3.push()
-        for key, value in init_result.items():
-            if mytensor.namemap[key][1]:        # Real
-                s.z3.add(z3.Real(key) == value)
-            else:                              # Bool
-                if value > 0:
-                    s.z3.add(z3.Bool(key))
-                else:
-                    s.z3.add(z3.Not(z3.Bool(key)))
+        # for key, value in init_result.items():
+        #     if mytensor.namemap[key][1]:        # Real
+        #         s.z3.add(z3.Real(key) == value)
+        #     else:                              # Bool
+        #         if value > 0:
+        #             s.z3.add(z3.Bool(key))
+        #         else:
+        #             s.z3.add(z3.Not(z3.Bool(key)))
 
-        res = s.z3.check()
+        # res = s.z3.check()
         s.z3.pop()
 
         s.add_assertion(formula)
@@ -113,11 +117,11 @@ def solve(path):
         res = s.z3.check()
         print(res)
         # print(s.z3.assertions())
-        # if(res == z3.sat):
-        # print(s.z3.model())
+        if(res == z3.sat):
+            print(s.z3.model())
 
-        T2 = time.process_time()
-        print('Z3运行时间:%d毫秒' % ((T2 - T1)*1000))
+    T2 = time.process_time()
+    print('Z3运行时间:%d毫秒' % ((T2 - T1)*1000))
 
 
 if __name__ == "__main__":
