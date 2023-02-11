@@ -58,15 +58,16 @@ def generate_init_solution(mytensor):
     Lr = 0.5
     T1 = time.process_time()
     y = mytensor.sol()
-    for name in mytensor.names:
-        init_result[name] = mytensor.vars[mytensor.namemap[name][0]].item()
-    return init_result
+    # for name in mytensor.names:
+    #     init_result[name] = mytensor.vars[mytensor.namemap[name][0]].item()
+    # return init_result
+
     T2 = time.process_time()
     if T2-T1 > 1:
-        epochs = int(100.0/(T2-T1))
+        epochs = int(200.0/(T2-T1))
         Lr *= epochs/600
-    print('程序运行时间1:%s毫秒' % ((T2 - T1)*1000))
-    print(epochs)
+    # print('程序运行时间1:%s毫秒' % ((T2 - T1)*1000))
+    # print(epochs)
 
     optimizer = torch.optim.Adam([mytensor.vars], lr=Lr)
     for step in range(epochs):
@@ -76,15 +77,10 @@ def generate_init_solution(mytensor):
 
         for name in mytensor.names:
             init_result[name] = mytensor.vars[mytensor.namemap[name][0]].item()
-        
-        T2 = time.process_time()
-        if y <= 0 or T2-T1 > 400:
-            break
 
-        # if(step % 50 == 0):
-        # print("step:%d" % (step))
-        # print(y.item())
-        # print()
+        T2 = time.process_time()
+        if y <= 0 or T2-T1 > 500:
+            break
 
         y.backward()
         optimizer.step()
@@ -92,12 +88,9 @@ def generate_init_solution(mytensor):
     return init_result
 
 
-def z3sol(formula, smt_logic, mytensor, init_result):
-    with Solver(name="z3", logic=smt_logic) as s:
-        # s.z3.push()
+def z3sol_with_val(formula, smt_logic, mytensor, init_result):
+    with Solver("z3", smt_logic) as s:
         s.add_assertion(formula)
-
-        s.z3.push()
         ignore = 0
         for key, value in init_result.items():
             if ignore < 1:
@@ -112,39 +105,33 @@ def z3sol(formula, smt_logic, mytensor, init_result):
                     s.z3.add(z3.Not(z3.Bool(key)))
 
         res = s.z3.check()
-        print(res)
-        if(res == z3.sat):
-            print(res)
-            return 0
-        print("!!!")
-        s.z3.pop()
-        print("!!!")
+        return res
 
-        s.z3.set("timeout", 600)
+
+def z3sol(formula, smt_logic):
+    with Solver("z3", smt_logic, solver_options={'TIMEOUT': 600}) as s:
+        # s.z3.push()
+        # s.z3.pop()
+        # s.add_assertion(formula)
         res = s.z3.check()
-        print(res)
-        # print(s.z3.assertions())
-        # if(res == z3.sat):
-        #     print(s.z3.model())
-    return 0
+        return res
 
 
 def solve(path):
     script, smt_logic = get_smt_script(path)
+    formula = get_smt_formula(path)
 
-    # T1 = time.process_time()
     mytensor = init_tensor(script)
     init_result = generate_init_solution(mytensor)
 
-    # T2 = time.process_time()
-    # print('pytorch运行时间:%d毫秒' % ((T2 - T1)*1000))
+    res = z3sol_with_val(formula, smt_logic, mytensor, init_result)
+    print(res)
 
-    formula = get_smt_formula(path)
-
-    # try:
-    z3sol(formula, smt_logic, mytensor, init_result)
-    # except Exception as e:
-    #     print("TLE")
+    if res == z3.sat:
+        print("sat")
+    # else:
+    #     res = z3sol(formula, smt_logic)
+    #     print(res)
 
 
 if __name__ == "__main__":
