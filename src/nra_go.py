@@ -62,7 +62,7 @@ def generate_init_solution(mytensor):
     T1 = time.process_time()
     y = mytensor.sol()
     # for name in mytensor.names:
-    #     init_result[name] = mytensor.vars[mytensor.namemap[name][0]].item()
+    #     init_result[name] = mytensor.vars[mytensor.namemap[name][0]].numpy()
     # return init_result
 
     T2 = time.process_time()
@@ -79,36 +79,40 @@ def generate_init_solution(mytensor):
         y = mytensor.sol()
 
         for name in mytensor.names:
-            init_result[name] = mytensor.vars[mytensor.namemap[name][0]].item()
+            init_result[name] = mytensor.vars[mytensor.namemap[name]
+                                              [0]].detach().numpy()
 
         T2 = time.process_time()
-        if y <= 0 or T2-T1 > 500:
+        if torch.any(y <= torch.zeros(dim)) or T2-T1 > 500:
             break
 
-        y.backward()
+        y.backward(torch.ones(dim))
         optimizer.step()
 
     return init_result
 
 
 def z3sol_with_val(formula, smt_logic, mytensor, init_result):
-    with Solver("z3", smt_logic) as s:
-        s.add_assertion(formula)
-        ignore = 0
-        for key, value in init_result.items():
-            if ignore < 1:
-                ignore += 1
-                continue
-            if mytensor.namemap[key][1]:        # Real
-                s.z3.add(z3.Real(key) == float(format(value, '.3g')))
-            else:                              # Bool
-                if value > 0:
-                    s.z3.add(z3.Bool(key))
-                else:
-                    s.z3.add(z3.Not(z3.Bool(key)))
+    for i in range(dim):
+        with Solver("z3", smt_logic) as s:
+            s.add_assertion(formula)
+            ignore = 0
+            for key, vals in init_result.items():
+                value = vals[i]
+                if ignore < 1:
+                    ignore += 1
+                    continue
+                if mytensor.namemap[key][1]:        # Real
+                    s.z3.add(z3.Real(key) == float(format(value, '.3g')))
+                else:                              # Bool
+                    if value > 0:
+                        s.z3.add(z3.Bool(key))
+                    else:
+                        s.z3.add(z3.Not(z3.Bool(key)))
 
-        res = s.z3.check()
-        return res
+            res = s.z3.check()
+            if res == z3.sat:
+                return res
 
 
 def z3sol(formula, smt_logic):
