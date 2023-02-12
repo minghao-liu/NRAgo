@@ -51,9 +51,12 @@ def init_tensor(script):
     return mytensor
 
 
+dim = 20
+
+
 def generate_init_solution(mytensor):
     init_result = {}
-    mytensor.init_val()
+    mytensor.init_val(dim)
     epochs = 600
     Lr = 0.5
     T1 = time.process_time()

@@ -115,92 +115,57 @@ class myTensor(object):
         return torch.tensor(args, requires_grad=False)
 
     def __and(self, args):
-        y = None
-        ty = None
+        y = self.zeros
         for arg in args:
-            x = self.tensor_args[arg]
-            if x <= 0:
-                if (ty is None) or (ty > x):
-                    ty = x
-                continue
-            if y is None:
-                y = x
-            else:
-                y = y + x
-        if y is None:
-            y = ty
+            y = y + torch.max(self.zeros, self.tensor_args[arg])
         return y
 
     def __or(self, args):
         y = None
         for arg in args:
-            if y is None:
-                y = self.tensor_args[arg]
-            else:
+            if y is not None:
                 y = torch.min(y, self.tensor_args[arg])
+            else:
+                y = self.tensor_args[arg]
         return y
 
     def __not(self, args):
         return - self.tensor_args[args[0]]
 
     def __implies(self, args):       # left -> right
-        _a = self.tensor_args[args[0]]
+        # return a<0?b:-a
+        _a = -self.tensor_args[args[0]]
         _b = self.tensor_args[args[1]]
-        if _a < self.acc_eps:
-            return _b
-        else:
-            return -_a
+        return torch.where(_a > 0, _b, _a)
 
     def __iff(self, args):           # left <-> right
         _a = self.tensor_args[args[0]]
         _b = self.tensor_args[args[1]]
-        if _a < self.acc_eps:
-            if _b < self.acc_eps:
-                return _a + _b
-            else:
-                return _b - _a
-        else:
-            if _b < self.acc_eps:
-                return _a - _b
-            else:
-                return -_b - _a
+        return torch.where(_a > 0, -_b, _b)+torch.where(_b > 0, -_a, _a)
 
     def __plus(self, args):
-        y = None
+        y = self.zeros
         for arg in args:
-            if y is None:
-                y = self.tensor_args[arg]
-            else:
-                y = y + self.tensor_args[arg]
+            y = y + self.tensor_args[arg]
         return y
 
     def __minus(self, args):
         return self.tensor_args[args[0]] - self.tensor_args[args[1]]
 
     def __times(self, args):
-        y = None
+        y = self.ones
         for arg in args:
-            if y is None:
-                y = self.tensor_args[arg]
-            else:
-                y = y * self.tensor_args[arg]
+            y = y * self.tensor_args[arg]
         return y
 
     def __div(self, args):
         return self.tensor_args[args[0]] / self.tensor_args[args[1]]
 
     def __equals(self, args):
-        _a = self.tensor_args[args[0]]
-        _b = self.tensor_args[args[1]]
-        if _a > _b:
-            return _a - _b
-        else:
-            return _b - _a
+        return torch.abs(self.tensor_args[args[0]]-self.tensor_args[args[1]])
 
     def __le(self, args):
-        _a = self.tensor_args[args[0]]
-        _b = self.tensor_args[args[1]]
-        return _a - _b
+        return self.tensor_args[args[0]] - self.tensor_args[args[1]]
 
     def __lt(self, args):
         return self.__le(args)
@@ -208,14 +173,16 @@ class myTensor(object):
     def __ite(self, args):       # if( iff ) then  left  else  right
         raise Smtworkerror("qwq")
 
-    def init_val(self):
+    def init_val(self, dim=1):
+        self.zeros = torch.zeros(dim, dtype=torch.float)
+        self.ones = torch.ones(dim, dtype=torch.float)
         tmp_list = []
         for name in self.names:
             nid = self.namemap[name][0]
             if self.namemap[name][1]:   # REAL
-                val = 0.15 - random.random()*0.1
+                val = [0.15 - random.random()*0.1 for _ in range(dim)]
             else:
-                val = 0.1 - random.random()*0.2
+                val = [0.1 - random.random()*0.2 for _ in range(dim)]
             tmp_list.append(val)
         self.vars = torch.tensor(tmp_list, requires_grad=True)
         l = len(tmp_list)
