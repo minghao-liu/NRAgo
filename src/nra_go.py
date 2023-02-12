@@ -132,7 +132,6 @@ def solve(path):
     init_result = generate_init_solution(mytensor)
 
     res = z3sol_with_val(formula, smt_logic, mytensor, init_result)
-    print(res)
 
     if res == z3.sat:
         print("sat")
