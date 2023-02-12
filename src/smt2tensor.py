@@ -73,7 +73,7 @@ class myTensor(object):
     def parse_assert(self, node):
         self.nodes.append(node)
 
-    def init_graph(self, node, layer):
+    def init_graph(self, node, layer, dim):
         if node.is_symbol():          # 符号
             return self.namemap[node.symbol_name()][0]
         if layer > self.task_layer_cnt:
@@ -83,14 +83,14 @@ class myTensor(object):
         if node.is_constant():          # 常量
             x = node.constant_value()   # gmpy2类型
             self.task_graph[layer].append(
-                [self.__constant, self.arg_cnt, float(x)])
+                [self.__constant, self.arg_cnt, [float(x)]*dim])
             self.arg_cnt += 1
             return self.arg_cnt-1
 
         tmp_list = []
         args = node.args()
         for arg in args:
-            tmp_list.append(self.init_graph(arg, layer+1))
+            tmp_list.append(self.init_graph(arg, layer+1, dim))
         type = node.node_type()
         self.task_graph[layer].append(
             [self.__commands[type], self.arg_cnt, tmp_list])
@@ -98,12 +98,12 @@ class myTensor(object):
 
         return self.arg_cnt-1
 
-    def init_tensor(self):
+    def init_tensor(self, dim):
         self.task_graph.append([[self.__commands[AND], self.arg_cnt, []]])
         self.answer_id = self.arg_cnt
         self.arg_cnt += 1
         for node in self.nodes:
-            self.task_graph[0][0][2].append(self.init_graph(node, 1))
+            self.task_graph[0][0][2].append(self.init_graph(node, 1, dim))
 
     def __forall(self, node):
         raise Smtworkerror("qwq")

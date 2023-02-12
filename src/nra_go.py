@@ -38,6 +38,9 @@ def adjust_learning_rate(optimizer, epoch, lr):
             param_group['lr'] = lr
 
 
+dim = 20
+
+
 def init_tensor(script):
     mytensor = myTensor()
     for cmd in script:
@@ -47,11 +50,8 @@ def init_tensor(script):
         elif cmd.name == smtcmd.ASSERT:
             node = cmd.args[0]
             mytensor.parse_assert(node)
-    mytensor.init_tensor()
+    mytensor.init_tensor(dim)
     return mytensor
-
-
-dim = 20
 
 
 def generate_init_solution(mytensor):
