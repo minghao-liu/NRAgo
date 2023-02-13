@@ -38,7 +38,7 @@ def adjust_learning_rate(optimizer, epoch, lr):
             param_group['lr'] = lr
 
 
-dim = 20
+dim = 100
 
 
 def init_tensor(script):
@@ -62,7 +62,7 @@ def generate_init_solution(mytensor):
     T1 = time.process_time()
     y = mytensor.sol()
     # for name in mytensor.names:
-    #     init_result[name] = mytensor.vars[mytensor.namemap[name][0]].numpy()
+    #     init_result[name] = mytensor.vars[mytensor.namemap[name][0]].detach().numpy()
     # return init_result
 
     T2 = time.process_time()
@@ -83,7 +83,7 @@ def generate_init_solution(mytensor):
                                               [0]].detach().numpy()
 
         T2 = time.process_time()
-        if torch.any(y <= torch.zeros(dim)) or T2-T1 > 500:
+        if torch.any(y <= torch.zeros(dim)) or T2-T1 > 600:
             break
 
         y.backward(torch.ones(dim))
@@ -111,6 +111,7 @@ def z3sol_with_val(formula, smt_logic, mytensor, init_result):
                         s.z3.add(z3.Not(z3.Bool(key)))
 
             res = s.z3.check()
+            print(res)
             if res == z3.sat:
                 return res
 
@@ -137,7 +138,7 @@ def solve(path):
         print("sat")
     # else:
     #     res = z3sol(formula, smt_logic)
-    #     print(res)
+    print(res)
 
 
 if __name__ == "__main__":
