@@ -38,7 +38,7 @@ def adjust_learning_rate(optimizer, epoch, lr):
             param_group['lr'] = lr
 
 
-dim = 100
+dim = 256
 
 
 def init_tensor(script):
