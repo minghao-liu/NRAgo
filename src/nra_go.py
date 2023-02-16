@@ -99,9 +99,14 @@ def z3sol_with_val(formula, smt_logic, mytensor, init_result):
             ignore = 0
             for key, vals in init_result.items():
                 value = vals[i]
-                if ignore < 1:
+                if (len(init_result)<50):
+                    if ignore < 1+(len(init_result)//10):
+                        ignore += 1
+                        continue
+                else :
                     ignore += 1
-                    continue
+                    if ignore % 2 ==0:
+                        continue 
                 if mytensor.namemap[key][1]:        # Real
                     s.z3.add(z3.Real(key) == float(format(value, '.3g')))
                 else:                              # Bool
@@ -111,7 +116,7 @@ def z3sol_with_val(formula, smt_logic, mytensor, init_result):
                         s.z3.add(z3.Not(z3.Bool(key)))
 
             res = s.z3.check()
-            print(res)
+            # print(res)
             if res == z3.sat:
                 return res
 
@@ -136,9 +141,11 @@ def solve(path):
 
     if res == z3.sat:
         print("sat")
+    else:
+        print("NONE")
     # else:
     #     res = z3sol(formula, smt_logic)
-    print(res)
+    # print(res)
 
 
 if __name__ == "__main__":

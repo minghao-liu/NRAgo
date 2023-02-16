@@ -1,5 +1,5 @@
 #!/bin/bash
-THREAD_NUM=5
+THREAD_NUM=20
 
 #指定分隔符
 IFS='
@@ -15,21 +15,40 @@ do
     echo >&9
 done
 
-for i in `ls instances/mbo_*` ;do
-    if [ ${i##*.} = "smt2" ];then
-        echo $i
-        #控制进程数：读出一个空格字符，如果管道为空，此处将阻塞
-        read -u9
-        {
-            #此行代码指定任务提交方法
-            python3 src/nra_go.py instances/$i > instances/result/mbo/$i
-            #每执行完一个程序，睡眠3s
-            sleep 1
-            #控制进程数：一个任务完成后，写入一个空格字符到管道，新的任务将可以执行
-            echo >&9
-        }&
-    fi
-done
+function parallel() {
+    for folder in $@/*;do 
+        if [ ! -d results/$folder ];then
+            mkdir results/$folder
+        fi
+        state=-1
+        for file in $folder/*;do
+            if test -f $file;then
+                state=0
+                break
+            fi
+            if test -d $file;then
+                state=1
+                break
+            fi
+        done
+        if [ $state -eq 0 ];then
+            for i in $folder/*; do
+                read -u9
+                {
+                    python3 src/nra_go.py $i > results/$i
+                    sleep 1
+                    #控制进程数：一个任务完成后，写入一个空格字符到管道，新的任务将可以执行
+                    echo >&9
+                }&
+            done
+        fi
+        if [ $state -eq 1 ];then
+            parallel $folder
+        fi
+    done
+}
+
+parallel $1
 
 wait
 echo "\n全部任务执行结束"
