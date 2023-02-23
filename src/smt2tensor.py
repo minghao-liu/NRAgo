@@ -6,6 +6,7 @@ from pysmt.operators import (FORALL, EXISTS, AND, OR, NOT, IMPLIES, IFF,
                              ITE)
 import torch
 import random
+import math
 
 
 class Smtworkerror(RuntimeError):
@@ -162,7 +163,8 @@ class myTensor(object):
         return self.tensor_args[args[0]] / self.tensor_args[args[1]]
 
     def __equals(self, args):
-        return torch.abs(self.tensor_args[args[0]]-self.tensor_args[args[1]])
+        y = (self.tensor_args[args[0]]-self.tensor_args[args[1]])
+        return y*y
 
     def __le(self, args):
         return self.tensor_args[args[0]] - self.tensor_args[args[1]]
@@ -180,9 +182,9 @@ class myTensor(object):
         for name in self.names:
             nid = self.namemap[name][0]
             if self.namemap[name][1]:   # REAL
-                val = [0.15 - random.random()*0.1 for _ in range(dim)]
+                val = [0.15 - random.random() * 0.1 for _ in range(dim)]
             else:
-                val = [0.1 - random.random()*0.2 for _ in range(dim)]
+                val = [1 - random.randint(0, 1) * 2 for _ in range(dim)]
             tmp_list.append(val)
         self.vars = torch.tensor(tmp_list, requires_grad=True)
         l = len(tmp_list)

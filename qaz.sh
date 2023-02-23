@@ -1,5 +1,5 @@
 #!/bin/bash
-THREAD_NUM=20
+THREAD_NUM=10
 
 #指定分隔符
 IFS='
@@ -33,6 +33,7 @@ function parallel() {
         done
         if [ $state -eq 0 ];then
             for i in $folder/*; do
+                echo $i
                 read -u9
                 {
                     python3 src/nra_go.py $i > results/$i
