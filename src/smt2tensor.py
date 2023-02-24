@@ -74,9 +74,29 @@ class myTensor(object):
     def parse_assert(self, node):
         self.nodes.append(node)
 
-    def init_graph(self, node, layer, dim):
+    def make_not_node(self, node, layer, dim):
+        if layer > self.task_layer_cnt:
+            self.task_layer_cnt += 1
+            self.task_graph.append([])
+        tmp_list = []
+        type = NOT
+        tmp_list.append(self.init_graph(node, layer+1, dim, 0))
+        self.task_graph[layer].append(
+            [self.__commands[type], self.arg_cnt, tmp_list])
+        self.arg_cnt += 1
+        return self.arg_cnt-1
+
+    def init_graph(self, node, layer, dim, is_not):
+        if node.is_not():               # 下传not
+            is_not ^= 1
+            return self.init_graph(node.arg(0), layer, dim, is_not)
+        if is_not:
+            if node.is_symbol() or node.is_constant() or node.is_equals():
+                return self.make_not_node(node, layer, dim)
+
         if node.is_symbol():          # 符号
             return self.namemap[node.symbol_name()][0]
+
         if layer > self.task_layer_cnt:
             self.task_layer_cnt += 1
             self.task_graph.append([])
@@ -90,13 +110,37 @@ class myTensor(object):
 
         tmp_list = []
         args = node.args()
-        for arg in args:
-            tmp_list.append(self.init_graph(arg, layer+1, dim))
         type = node.node_type()
+        if is_not:          # 取反
+            if type == AND:
+                type = OR
+                for arg in args:
+                    tmp_list.append(self.init_graph(arg, layer+1, dim, 1))
+            elif type == OR:
+                type = AND
+                for arg in args:
+                    tmp_list.append(self.init_graph(arg, layer+1, dim, 1))
+            elif type == IMPLIES:
+                type = AND
+                tmp_list.append(self.init_graph(args[0], layer+1, dim, 0))
+                tmp_list.append(self.init_graph(args[1], layer+1, dim, 1))
+            elif type == IFF:
+                tmp_list.append(self.init_graph(args[0], layer+1, dim, 0))
+                tmp_list.append(self.init_graph(args[1], layer+1, dim, 1))
+            elif type == LE:
+                tmp_list.append(self.init_graph(args[1], layer+1, dim, 0))
+                tmp_list.append(self.init_graph(args[0], layer+1, dim, 0))
+            elif type == LT:
+                tmp_list.append(self.init_graph(args[1], layer+1, dim, 0))
+                tmp_list.append(self.init_graph(args[0], layer+1, dim, 0))
+            else:
+                raise Smtworkerror("Undefined")
+        else:
+            for arg in args:
+                tmp_list.append(self.init_graph(arg, layer+1, dim, 0))
         self.task_graph[layer].append(
             [self.__commands[type], self.arg_cnt, tmp_list])
         self.arg_cnt += 1
-
         return self.arg_cnt-1
 
     def init_tensor(self, dim):
@@ -104,7 +148,7 @@ class myTensor(object):
         self.answer_id = self.arg_cnt
         self.arg_cnt += 1
         for node in self.nodes:
-            self.task_graph[0][0][2].append(self.init_graph(node, 1, dim))
+            self.task_graph[0][0][2].append(self.init_graph(node, 1, dim, 0))
 
     def __forall(self, node):
         raise Smtworkerror("qwq")

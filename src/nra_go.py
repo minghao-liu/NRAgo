@@ -112,7 +112,7 @@ def approx(l, r, x, dep):
 def z3sol_with_val(formula, smt_logic, mytensor, init_result):
     with Solver("z3", smt_logic) as s:
         s.add_assertion(formula)
-        ignore = min(10, 2+(len(init_result)//5))
+        ignore = min(12, 2+(len(init_result)//7))
         cnt = 0
         for (key, value, grad) in init_result:
             cnt += 1
@@ -132,15 +132,6 @@ def z3sol_with_val(formula, smt_logic, mytensor, init_result):
         # if res == z3.sat:
         #     print(s.z3.model())
         # print(res)
-        return res
-
-
-def z3sol(formula, smt_logic):
-    with Solver("z3", smt_logic, solver_options={'TIMEOUT': 600}) as s:
-        # s.z3.push()
-        # s.z3.pop()
-        # s.add_assertion(formula)
-        res = s.z3.check()
         return res
 
 
