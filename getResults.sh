@@ -15,10 +15,14 @@ function parallel() {
         done
         if [ $state -eq 0 ];then
             for i in $folder/*; do
-                while read line
-                do
-                    echo $i','$line >> result.csv
-                done < $i
+                if [ -s $i ];then
+                    while read line
+                    do
+                        echo $i','$line >> result.csv
+                    done < $i
+                else
+                    echo $i", NA" >> result.csv
+                fi
             done
         fi
         if [ $state -eq 1 ];then
