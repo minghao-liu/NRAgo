@@ -6,6 +6,7 @@ from pysmt.operators import (FORALL, EXISTS, AND, OR, NOT, IMPLIES, IFF,
                              ITE)
 import torch
 import random
+import math
 
 
 class Smtworkerror(RuntimeError):
@@ -73,9 +74,29 @@ class myTensor(object):
     def parse_assert(self, node):
         self.nodes.append(node)
 
-    def init_graph(self, node, layer):
+    def make_not_node(self, node, layer, dim):
+        if layer > self.task_layer_cnt:
+            self.task_layer_cnt += 1
+            self.task_graph.append([])
+        tmp_list = []
+        type = NOT
+        tmp_list.append(self.init_graph(node, layer+1, dim, 0))
+        self.task_graph[layer].append(
+            [self.__commands[type], self.arg_cnt, tmp_list])
+        self.arg_cnt += 1
+        return self.arg_cnt-1
+
+    def init_graph(self, node, layer, dim, is_not):
+        if node.is_not():               # 下传not
+            is_not ^= 1
+            return self.init_graph(node.arg(0), layer, dim, is_not)
+        if is_not:
+            if node.is_symbol() or node.is_constant() or node.is_equals():
+                return self.make_not_node(node, layer, dim)
+
         if node.is_symbol():          # 符号
             return self.namemap[node.symbol_name()][0]
+
         if layer > self.task_layer_cnt:
             self.task_layer_cnt += 1
             self.task_graph.append([])
@@ -83,27 +104,51 @@ class myTensor(object):
         if node.is_constant():          # 常量
             x = node.constant_value()   # gmpy2类型
             self.task_graph[layer].append(
-                [self.__constant, self.arg_cnt, float(x)])
+                [self.__constant, self.arg_cnt, [float(x)]*dim])
             self.arg_cnt += 1
             return self.arg_cnt-1
 
         tmp_list = []
         args = node.args()
-        for arg in args:
-            tmp_list.append(self.init_graph(arg, layer+1))
         type = node.node_type()
+        if is_not:          # 取反
+            if type == AND:
+                type = OR
+                for arg in args:
+                    tmp_list.append(self.init_graph(arg, layer+1, dim, 1))
+            elif type == OR:
+                type = AND
+                for arg in args:
+                    tmp_list.append(self.init_graph(arg, layer+1, dim, 1))
+            elif type == IMPLIES:
+                type = AND
+                tmp_list.append(self.init_graph(args[0], layer+1, dim, 0))
+                tmp_list.append(self.init_graph(args[1], layer+1, dim, 1))
+            elif type == IFF:
+                tmp_list.append(self.init_graph(args[0], layer+1, dim, 0))
+                tmp_list.append(self.init_graph(args[1], layer+1, dim, 1))
+            elif type == LE:
+                tmp_list.append(self.init_graph(args[1], layer+1, dim, 0))
+                tmp_list.append(self.init_graph(args[0], layer+1, dim, 0))
+            elif type == LT:
+                tmp_list.append(self.init_graph(args[1], layer+1, dim, 0))
+                tmp_list.append(self.init_graph(args[0], layer+1, dim, 0))
+            else:
+                raise Smtworkerror("Undefined")
+        else:
+            for arg in args:
+                tmp_list.append(self.init_graph(arg, layer+1, dim, 0))
         self.task_graph[layer].append(
             [self.__commands[type], self.arg_cnt, tmp_list])
         self.arg_cnt += 1
-
         return self.arg_cnt-1
 
-    def init_tensor(self):
+    def init_tensor(self, dim):
         self.task_graph.append([[self.__commands[AND], self.arg_cnt, []]])
         self.answer_id = self.arg_cnt
         self.arg_cnt += 1
         for node in self.nodes:
-            self.task_graph[0][0][2].append(self.init_graph(node, 1))
+            self.task_graph[0][0][2].append(self.init_graph(node, 1, dim, 0))
 
     def __forall(self, node):
         raise Smtworkerror("qwq")
@@ -115,92 +160,58 @@ class myTensor(object):
         return torch.tensor(args, requires_grad=False)
 
     def __and(self, args):
-        y = None
-        ty = None
+        y = self.zeros
         for arg in args:
-            x = self.tensor_args[arg]
-            if x <= 0:
-                if (ty is None) or (ty > x):
-                    ty = x
-                continue
-            if y is None:
-                y = x
-            else:
-                y = y + x
-        if y is None:
-            y = ty
+            y = y + torch.max(self.zeros, self.tensor_args[arg])
         return y
 
     def __or(self, args):
         y = None
         for arg in args:
-            if y is None:
-                y = self.tensor_args[arg]
-            else:
+            if y is not None:
                 y = torch.min(y, self.tensor_args[arg])
+            else:
+                y = self.tensor_args[arg]
         return y
 
     def __not(self, args):
         return - self.tensor_args[args[0]]
 
     def __implies(self, args):       # left -> right
-        _a = self.tensor_args[args[0]]
+        # return a<0?b:-a
+        _a = -self.tensor_args[args[0]]
         _b = self.tensor_args[args[1]]
-        if _a < self.acc_eps:
-            return _b
-        else:
-            return -_a
+        return torch.where(_a > 0, _b, _a)
 
     def __iff(self, args):           # left <-> right
         _a = self.tensor_args[args[0]]
         _b = self.tensor_args[args[1]]
-        if _a < self.acc_eps:
-            if _b < self.acc_eps:
-                return _a + _b
-            else:
-                return _b - _a
-        else:
-            if _b < self.acc_eps:
-                return _a - _b
-            else:
-                return -_b - _a
+        return torch.where(_a > 0, -_b, _b)+torch.where(_b > 0, -_a, _a)
 
     def __plus(self, args):
-        y = None
+        y = self.zeros
         for arg in args:
-            if y is None:
-                y = self.tensor_args[arg]
-            else:
-                y = y + self.tensor_args[arg]
+            y = y + self.tensor_args[arg]
         return y
 
     def __minus(self, args):
         return self.tensor_args[args[0]] - self.tensor_args[args[1]]
 
     def __times(self, args):
-        y = None
+        y = self.ones
         for arg in args:
-            if y is None:
-                y = self.tensor_args[arg]
-            else:
-                y = y * self.tensor_args[arg]
+            y = y * self.tensor_args[arg]
         return y
 
     def __div(self, args):
         return self.tensor_args[args[0]] / self.tensor_args[args[1]]
 
     def __equals(self, args):
-        _a = self.tensor_args[args[0]]
-        _b = self.tensor_args[args[1]]
-        if _a > _b:
-            return _a - _b
-        else:
-            return _b - _a
+        y = (self.tensor_args[args[0]]-self.tensor_args[args[1]])
+        return y*y
 
     def __le(self, args):
-        _a = self.tensor_args[args[0]]
-        _b = self.tensor_args[args[1]]
-        return _a - _b
+        return self.tensor_args[args[0]] - self.tensor_args[args[1]]
 
     def __lt(self, args):
         return self.__le(args)
@@ -208,14 +219,16 @@ class myTensor(object):
     def __ite(self, args):       # if( iff ) then  left  else  right
         raise Smtworkerror("qwq")
 
-    def init_val(self):
+    def init_val(self, dim=1):
+        self.zeros = torch.zeros(dim, dtype=torch.float)
+        self.ones = torch.ones(dim, dtype=torch.float)
         tmp_list = []
         for name in self.names:
             nid = self.namemap[name][0]
             if self.namemap[name][1]:   # REAL
-                val = 0.15 - random.random()*0.1
+                val = [0.15 - random.random() * 0.1 for _ in range(dim)]
             else:
-                val = 0.1 - random.random()*0.2
+                val = [1 - random.randint(0, 1) * 2 for _ in range(dim)]
             tmp_list.append(val)
         self.vars = torch.tensor(tmp_list, requires_grad=True)
         l = len(tmp_list)

@@ -6,6 +6,8 @@ import torch
 from smt2tensor import myTensor
 import z3
 import time
+import math
+import gmpy2
 
 
 def parse_args():
@@ -38,6 +40,9 @@ def adjust_learning_rate(optimizer, epoch, lr):
             param_group['lr'] = lr
 
 
+dim = 256
+
+
 def init_tensor(script):
     mytensor = myTensor()
     for cmd in script:
@@ -47,21 +52,17 @@ def init_tensor(script):
         elif cmd.name == smtcmd.ASSERT:
             node = cmd.args[0]
             mytensor.parse_assert(node)
-    mytensor.init_tensor()
+    mytensor.init_tensor(dim)
     return mytensor
 
 
 def generate_init_solution(mytensor):
     init_result = {}
-    mytensor.init_val()
+    mytensor.init_val(dim)
     epochs = 600
     Lr = 0.5
     T1 = time.process_time()
     y = mytensor.sol()
-    # for name in mytensor.names:
-    #     init_result[name] = mytensor.vars[mytensor.namemap[name][0]].item()
-    # return init_result
-
     T2 = time.process_time()
     if T2-T1 > 1:
         epochs = int(200.0/(T2-T1))
@@ -75,46 +76,84 @@ def generate_init_solution(mytensor):
         optimizer.zero_grad()
         y = mytensor.sol()
 
+        y.backward(torch.ones(dim))
         for name in mytensor.names:
-            init_result[name] = mytensor.vars[mytensor.namemap[name][0]].item()
+            init_result[name] = (mytensor.vars[mytensor.namemap[name][0]],
+                                 mytensor.vars.grad[mytensor.namemap[name][0]])
 
+        # print(y)
+        # print(init_result)
+        # time.sleep(2)
         T2 = time.process_time()
-        if y <= 0 or T2-T1 > 500:
+        if torch.any(y < torch.zeros(dim)):
+            return None
+        if T2-T1 > 600:
             break
-
-        y.backward()
         optimizer.step()
 
     return init_result
 
 
+def approx(l, r, x, dep):
+    mid = (l+r)/2
+    dep += 1
+    if dep >= 15 or mid == x:
+        return mid
+    elif mid > x:
+        return approx(l, mid, x, dep)
+    else:
+        return approx(mid, r, x, dep)
+
+
+ignore = 20
+
+
 def z3sol_with_val(formula, smt_logic, mytensor, init_result):
     with Solver("z3", smt_logic) as s:
         s.add_assertion(formula)
-        ignore = 0
-        for key, value in init_result.items():
-            if ignore < 1:
-                ignore += 1
-                continue
+        for (key, value, grad) in init_result:
             if mytensor.namemap[key][1]:        # Real
-                s.z3.add(z3.Real(key) == float(format(value, '.3g')))
+                x = float(format(value, '.2g'))
+                if abs(x) < 1e-5:
+                    x = 0
+                s.z3.add(z3.Real(key) == x)
             else:                              # Bool
                 if value > 0:
-                    s.z3.add(z3.Bool(key))
-                else:
                     s.z3.add(z3.Not(z3.Bool(key)))
-
+                else:
+                    s.z3.add(z3.Bool(key))
         res = s.z3.check()
-        return res
+        s.z3.reset()
+    # if res == z3.sat:
+    #     print(s.z3.model())
+    # print(res)
+    return res
 
 
-def z3sol(formula, smt_logic):
-    with Solver("z3", smt_logic, solver_options={'TIMEOUT': 600}) as s:
-        # s.z3.push()
-        # s.z3.pop()
-        # s.add_assertion(formula)
-        res = s.z3.check()
-        return res
+def make_ignore(init_result, formula, smt_logic, mytensor):
+    global ignore
+    ignore = 0
+
+    init_val = []
+    for key, (vals, grads) in init_result.items():
+        value = vals[0]
+        grad = grads[0]
+        init_val.append((key, value.float(), grad))
+
+    for i in range(min(12, 2+(len(init_result)//5))):
+        ignore += 1
+        T1 = time.process_time()
+        t_val = init_val[ignore:]
+        res = z3sol_with_val(formula, smt_logic, mytensor, t_val)
+        T2 = time.process_time()
+        if T2-T1 > 2:
+            ignore -= 1
+            break
+    if ignore > len(init_result):
+        ignore = len(init_result)
+    if ignore == 0:
+        ignore = 1
+    # print(ignore)
 
 
 def solve(path):
@@ -124,14 +163,29 @@ def solve(path):
     mytensor = init_tensor(script)
     init_result = generate_init_solution(mytensor)
 
-    res = z3sol_with_val(formula, smt_logic, mytensor, init_result)
-    print(res)
+    if init_result is None:         # sat
+        res = z3.sat
+    else:
+        make_ignore(init_result, formula, smt_logic, mytensor)
+        for i in range(dim):
+            init_val = []
+            for key, (vals, grads) in init_result.items():
+                value = vals[i]
+                grad = grads[i]
+                init_val.append((key, value.float(), grad))
+            init_val.sort(key=lambda s: (s[2], s[0]))
+            init_val = init_val[ignore:]
+            res = z3sol_with_val(formula, smt_logic, mytensor, init_val)
+            if res == z3.sat:
+                break
 
     if res == z3.sat:
         print("sat")
+    else:
+        print("NONE")
     # else:
     #     res = z3sol(formula, smt_logic)
-    #     print(res)
+    # print(res)
 
 
 if __name__ == "__main__":
