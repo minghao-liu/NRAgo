@@ -1,16 +1,14 @@
 from pysmt.smtlib.parser import SmtLibParser, get_formula
 import pysmt.smtlib.commands as smtcmd
 from pysmt.shortcuts import Solver
+from concurrent.futures import ProcessPoolExecutor
 import argparse
-import torch
+import time, math, gmpy2
+import z3, torch
 from smt2tensor import myTensor
-import z3
-import time
-import math
-import gmpy2
 
 
-DEBUG = False
+DEBUG = True
 
 
 def parse_args():
@@ -43,7 +41,7 @@ def adjust_learning_rate(optimizer, epoch, lr):
             param_group['lr'] = lr
 
 
-dim = 512
+dim = 1024
 
 
 def init_tensor(script):
@@ -117,7 +115,7 @@ def approx_x(x):
     l = gmpy2.mpq(math.floor(x))
     r = gmpy2.mpq(math.ceil(x))
     x = gmpy2.mpq(x)
-    return approx(l, r, x, 2)
+    return approx(l, r, x, 1)
 
 
 def z3sol_with_val(formula, smt_logic, mytensor, init_result):
