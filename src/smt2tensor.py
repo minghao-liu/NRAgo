@@ -7,6 +7,7 @@ from pysmt.operators import (FORALL, EXISTS, AND, OR, NOT, IMPLIES, IFF,
 import torch
 import random
 import math
+import collections
 
 
 class Smtworkerror(RuntimeError):
@@ -20,8 +21,10 @@ class myTensor(object):
     def __init__(self):
         self.nodes = []             # assert集合
         self.task_graph = []        # [[[command, nodeid, [argid_1, ...]], ...], ...]
+        self.task_set = {}
         self.task_layer_cnt = 0
         self.tensor_args = {}
+        self.and_task = []
         self.arg_cnt = 0
         self.names = []             # 变量名
         self.namemap = {}           # 变量名到数组位置映射(id, Real变量=True)
@@ -44,18 +47,12 @@ class myTensor(object):
             ITE: self.__ite,
         }
 
-    def add_real_arg(self, name, val=None):
-        # if val is None:
-        #     val = 0.15 - random.random()*0.1
-        # self.args.append(val)
+    def add_real_arg(self, name):
         self.namemap[name] = (self.arg_cnt, True)
         self.names.append(name)
         self.arg_cnt += 1
 
-    def add_bool_arg(self, name, val=None):
-        # if val is None:
-        #     val = 0.1 - random.random()*0.2
-        # self.args.append(val)
+    def add_bool_arg(self, name):
         self.namemap[name] = (self.arg_cnt, False)
         self.names.append(name)
         self.arg_cnt += 1
@@ -63,8 +60,7 @@ class myTensor(object):
     def parse_declare(self, symbol):
         type = symbol.symbol_type()
         name = symbol.symbol_name()
-        # print(type, name)
-        if type.is_real_type():     # 先仅处理Real类型（似乎没有其他的？
+        if type.is_real_type():
             self.add_real_arg(name)
         elif type.is_bool_type():
             self.add_bool_arg(name)
@@ -80,13 +76,16 @@ class myTensor(object):
             self.task_graph.append([])
         tmp_list = []
         type = NOT
-        tmp_list.append(self.init_graph(node, layer+1, dim, 0))
+        tid = self.init_graph(node, layer+1, dim, 0)
+        tmp_list.append(tid)
+        tmp_set = self.task_set[tid]
         self.task_graph[layer].append(
             [self.__commands[type], self.arg_cnt, tmp_list])
+        self.task_set[self.arg_cnt] = tmp_set
         self.arg_cnt += 1
         return self.arg_cnt-1
 
-    def init_graph(self, node, layer, dim, is_not):
+    def init_graph(self, node, layer, dim, is_not, is_and=0):
         if node.is_not():               # 下传not
             is_not ^= 1
             return self.init_graph(node.arg(0), layer, dim, is_not)
@@ -105,6 +104,7 @@ class myTensor(object):
             x = node.constant_value()   # gmpy2类型
             self.task_graph[layer].append(
                 [self.__constant, self.arg_cnt, [float(x)]*dim])
+            self.task_set[self.arg_cnt] = set()
             self.arg_cnt += 1
             return self.arg_cnt-1
 
@@ -119,11 +119,14 @@ class myTensor(object):
             elif type == OR:
                 type = AND
                 for arg in args:
-                    tmp_list.append(self.init_graph(arg, layer+1, dim, 1))
+                    tmp_list.append(self.init_graph(
+                        arg, layer+1, dim, 1, is_and))
             elif type == IMPLIES:
                 type = AND
-                tmp_list.append(self.init_graph(args[0], layer+1, dim, 0))
-                tmp_list.append(self.init_graph(args[1], layer+1, dim, 1))
+                tmp_list.append(self.init_graph(
+                    args[0], layer+1, dim, 0, is_and))
+                tmp_list.append(self.init_graph(
+                    args[1], layer+1, dim, 1, is_and))
             elif type == IFF:
                 tmp_list.append(self.init_graph(args[0], layer+1, dim, 0))
                 tmp_list.append(self.init_graph(args[1], layer+1, dim, 1))
@@ -136,19 +139,36 @@ class myTensor(object):
             else:
                 raise Smtworkerror("Undefined")
         else:
+            if type == AND:
+                tis_and = is_and
+            else:
+                tis_and = 0
             for arg in args:
-                tmp_list.append(self.init_graph(arg, layer+1, dim, 0))
+                tmp_list.append(self.init_graph(arg, layer+1, dim, 0, tis_and))
         self.task_graph[layer].append(
             [self.__commands[type], self.arg_cnt, tmp_list])
+
+        tmp_set = set()
+        for tid in tmp_list:
+            tmp_set = tmp_set | self.task_set[tid]
+        self.task_set[self.arg_cnt] = tmp_set
+        if is_and and self.and_task.count(tmp_list[0]) == 0:
+            self.and_task.append(self.arg_cnt)
         self.arg_cnt += 1
         return self.arg_cnt-1
 
     def init_tensor(self, dim):
+        for name in self.names:
+            tmp_set = set()
+            nid = self.namemap[name][0]
+            tmp_set.add(nid)
+            self.task_set[nid] = tmp_set
         self.task_graph.append([[self.__commands[AND], self.arg_cnt, []]])
         self.answer_id = self.arg_cnt
         self.arg_cnt += 1
         for node in self.nodes:
-            self.task_graph[0][0][2].append(self.init_graph(node, 1, dim, 0))
+            self.task_graph[0][0][2].append(
+                self.init_graph(node, 1, dim, 0, 1))
 
     def __forall(self, node):
         raise Smtworkerror("qwq")
@@ -242,6 +262,43 @@ class myTensor(object):
                 self.tensor_args[oper[1]] = fun(oper[2])
 
         return self.tensor_args[self.answer_id]
+
+    def run(self, initval):
+        grads = {}
+        for (key, val, grad) in initval:
+            nid = self.namemap[key][0]
+            if self.namemap[key][1]:        # Real
+                val = float(format(val, '.2g'))
+                if abs(val) < 1e-5:
+                    val = 0
+            grads[nid] = grad
+            self.tensor_args[nid] = torch.tensor([val])
+        self.sol()
+
+        subsets = [self.task_set[tid]
+                   for tid in self.and_task if self.tensor_args[tid][0] > 0]
+        subsets = sorted(subsets, key=len)
+        counter = collections.Counter(
+            elem for subset in subsets for elem in subset)
+        result = set()
+
+        for subset in subsets:
+            min_elem = None
+            for id in subset:
+                if id in result:
+                    continue
+                if min_elem is None or counter[min_elem] > counter[id] or (counter[min_elem] == counter[id] and grads[min_elem] > grads[id]):
+                    min_elem = id
+
+                counter[id] -= 1
+                if counter[id] == 0:
+                    del counter[id]
+            # print(min_elem)
+            if min_elem is not None:
+                result.add(min_elem)
+
+        # print(subsets, result)
+        return [(key, val) for (key, val, grad) in initval if self.namemap[key][0] not in result]
 
     def print_args(self, mss=None):
         if mss:
