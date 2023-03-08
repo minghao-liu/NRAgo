@@ -47,18 +47,12 @@ class myTensor(object):
             ITE: self.__ite,
         }
 
-    def add_real_arg(self, name, val=None):
-        # if val is None:
-        #     val = 0.15 - random.random()*0.1
-        # self.args.append(val)
+    def add_real_arg(self, name):
         self.namemap[name] = (self.arg_cnt, True)
         self.names.append(name)
         self.arg_cnt += 1
 
-    def add_bool_arg(self, name, val=None):
-        # if val is None:
-        #     val = 0.1 - random.random()*0.2
-        # self.args.append(val)
+    def add_bool_arg(self, name):
         self.namemap[name] = (self.arg_cnt, False)
         self.names.append(name)
         self.arg_cnt += 1
@@ -66,8 +60,7 @@ class myTensor(object):
     def parse_declare(self, symbol):
         type = symbol.symbol_type()
         name = symbol.symbol_name()
-        # print(type, name)
-        if type.is_real_type():     # 先仅处理Real类型（似乎没有其他的？
+        if type.is_real_type():
             self.add_real_arg(name)
         elif type.is_bool_type():
             self.add_bool_arg(name)

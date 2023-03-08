@@ -86,9 +86,6 @@ def generate_init_solution(mytensor):
             init_result[name] = (mytensor.vars[mytensor.namemap[name][0]],
                                  mytensor.vars.grad[mytensor.namemap[name][0]])
 
-        # print(y)
-        # print(init_result)
-        # time.sleep(2)
         T2 = time.process_time()
         if torch.any(y < torch.zeros(dim)):
             return None
@@ -127,7 +124,6 @@ def z3sol_with_val(formula, smt_logic, mytensor, init_result):
     with Solver("z3") as s:
         s.z3.set("timeout", 2000)       # ms
         s.add_assertion(formula)
-
         for (key, value) in init_result:
             if mytensor.namemap[key][1]:        # Real
                 x = float(format(value, '.2g'))
@@ -142,9 +138,6 @@ def z3sol_with_val(formula, smt_logic, mytensor, init_result):
                 else:
                     s.z3.add(z3.Bool(key))
         res = s.z3.check()
-
-        # if res == z3.sat:
-        #     print(s.z3.model())
         s.z3.reset()
     if DEBUG:
         print(res)
@@ -177,7 +170,9 @@ def make_ignore(init_result, formula, smt_logic, mytensor):
         ignore = len(init_result)
     if ignore == 0:
         ignore = 1
-    # print(ignore)
+
+    if DEBUG:
+        print(ignore)
 
 
 def solve(path):
@@ -198,10 +193,6 @@ def solve(path):
                 grad = grads[i]
                 init_val.append((key, value.float(), grad))
             init_val = mytensor.run(init_val)
-            # time.sleep(100)
-            # print(init_val)
-            # init_val.sort(key=lambda s: (s[2], s[0]))
-            # init_val = init_val[ignore:]
             res = z3sol_with_val(formula, smt_logic, mytensor, init_val)
             if res == z3.sat:
                 break
@@ -210,9 +201,6 @@ def solve(path):
         print("sat")
     else:
         print("NONE")
-    # else:
-    #     res = z3sol(formula, smt_logic)
-    # print(res)
 
 
 if __name__ == "__main__":
