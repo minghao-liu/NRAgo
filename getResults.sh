@@ -1,5 +1,7 @@
 #!/bin/bash
 
+out_file=$2
+
 function parallel() {
     for folder in $@/*;do 
         state=-1
@@ -18,10 +20,10 @@ function parallel() {
                 if [ -s $i ];then
                     while read line
                     do
-                        echo $i','$line >> result.csv
+                        echo $i','$line >> $out_file
                     done < $i
                 else
-                    echo $i", NA" >> result.csv
+                    echo $i", NA" >> $out_file
                 fi
             done
         fi

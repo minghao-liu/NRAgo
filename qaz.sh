@@ -1,5 +1,5 @@
 #!/bin/bash
-THREAD_NUM=10
+THREAD_NUM=6
 
 #指定分隔符
 IFS='
