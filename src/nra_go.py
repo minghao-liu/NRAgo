@@ -3,12 +3,20 @@ import pysmt.smtlib.commands as smtcmd
 from pysmt.shortcuts import Solver
 from concurrent.futures import ProcessPoolExecutor
 import argparse
-import time, math, gmpy2
-import z3, torch
+import time
+import z3
+import torch
+import math
+import gmpy2
 from smt2tensor import myTensor
 
 
-DEBUG = True
+DEBUG = False
+DIM = 1024
+Z3TIMELIMIT = 20000     # ms
+ITERTIMELIMIT = 600     # s
+Epochs = 600
+Lr = 0.5
 
 
 def parse_args():
@@ -41,9 +49,6 @@ def adjust_learning_rate(optimizer, epoch, lr):
             param_group['lr'] = lr
 
 
-dim = 1024
-
-
 def init_tensor(script):
     mytensor = myTensor()
     for cmd in script:
@@ -53,41 +58,41 @@ def init_tensor(script):
         elif cmd.name == smtcmd.ASSERT:
             node = cmd.args[0]
             mytensor.parse_assert(node)
-    mytensor.init_tensor(dim)
+    mytensor.init_tensor(DIM)
     return mytensor
 
 
 def generate_init_solution(mytensor):
+    global Epochs, Lr
     init_result = {}
-    mytensor.init_val(dim)
-    epochs = 600
-    Lr = 0.5
+    mytensor.init_val(DIM)
     T1 = time.process_time()
     y = mytensor.sol()
     T2 = time.process_time()
     if T2-T1 > 1:
-        epochs = int(200.0/(T2-T1))
-        Lr *= epochs/600
+        new_epochs = int(ITERTIMELIMIT*0.45/(T2-T1))
+        Lr *= new_epochs/Epochs
+        Epochs = new_epochs
 
     if DEBUG:
         print('程序运行时间1:%s毫秒' % ((T2 - T1)*1000))
-        print(epochs)
+        print(Epochs)
 
     optimizer = torch.optim.Adam([mytensor.vars], lr=Lr)
-    for step in range(epochs):
+    for step in range(Epochs):
         adjust_learning_rate(optimizer, step, Lr)
         optimizer.zero_grad()
         y = mytensor.sol()
 
-        y.backward(torch.ones(dim))
+        y.backward(torch.ones(DIM))
         for name in mytensor.names:
             init_result[name] = (mytensor.vars[mytensor.namemap[name][0]],
                                  mytensor.vars.grad[mytensor.namemap[name][0]])
 
         T2 = time.process_time()
-        if torch.any(y < torch.zeros(dim)):
+        if torch.any(y < torch.zeros(DIM)):
             return None
-        if T2-T1 > 600:
+        if T2-T1 > ITERTIMELIMIT:
             break
         optimizer.step()
 
@@ -118,12 +123,12 @@ def approx_x(x):
     return approx(l, r, x, 1)
 
 
-def z3sol_with_val(formula, smt_logic, mytensor, init_result):
+def z3sol_with_val(formula, smt_logic, namemap, init_result):
     with Solver("z3") as s:
-        s.z3.set("timeout", 2000)       # ms
+        s.z3.set("timeout", Z3TIMELIMIT)       # ms
         s.add_assertion(formula)
         for (key, value) in init_result:
-            if mytensor.namemap[key][1]:        # Real
+            if namemap[key][1]:        # Real
                 x = float(format(value, '.2g'))
                 if abs(x) < 1e-5:
                     x = 0
@@ -139,16 +144,11 @@ def z3sol_with_val(formula, smt_logic, mytensor, init_result):
         s.z3.reset()
     if DEBUG:
         print(res)
-    return res
-
-
-ignore = 20
+    return res == z3.sat
 
 
 def make_ignore(init_result, formula, smt_logic, mytensor):
-    global ignore
     ignore = 0
-
     init_val = []
     for key, (vals, grads) in init_result.items():
         value = vals[0]
@@ -159,7 +159,7 @@ def make_ignore(init_result, formula, smt_logic, mytensor):
         ignore += 1
         T1 = time.process_time()
         t_val = init_val[ignore:]
-        res = z3sol_with_val(formula, smt_logic, mytensor, t_val)
+        res = z3sol_with_val(formula, smt_logic, mytensor.namemap, t_val)
         T2 = time.process_time()
         if T2-T1 > 2:
             ignore -= 1
@@ -173,6 +173,32 @@ def make_ignore(init_result, formula, smt_logic, mytensor):
         print(ignore)
 
 
+def parallel_sol(init_result, mytensor, formula, smt_logic):
+    # make_ignore(init_result, formula, smt_logic, mytensor)
+    with ProcessPoolExecutor() as executor:
+        futures = []
+        for i in range(DIM):
+            init_val = []
+            for key, (vals, grads) in init_result.items():
+                value = vals[i]
+                grad = grads[i]
+                init_val.append((key, value.float(), grad))
+            init_val = mytensor.run(init_val)
+
+            future = executor.submit(
+                z3sol_with_val, formula, smt_logic, mytensor.namemap, init_val)
+            futures.append(future)
+
+        for future in futures:
+            if future.result():
+                # if one of the functions returns True, cancel the remaining functions
+                for f in futures:
+                    if not f.done():
+                        f.cancel()
+                return True
+    return False
+
+
 def solve(path):
     script, smt_logic = get_smt_script(path)
     formula = get_smt_formula(path)
@@ -181,29 +207,15 @@ def solve(path):
     init_result = generate_init_solution(mytensor)
 
     if init_result is None:         # sat
-        res = z3.sat
-    else:
-        # make_ignore(init_result, formula, smt_logic, mytensor)
-        for i in range(dim):
-            init_val = []
-            for key, (vals, grads) in init_result.items():
-                value = vals[i]
-                grad = grads[i]
-                init_val.append((key, value.float(), grad))
-            init_val = mytensor.run(init_val)
-            res = z3sol_with_val(formula, smt_logic, mytensor, init_val)
-            if res == z3.sat:
-                break
-
-    if res == z3.sat:
         print("sat")
     else:
-        print("NONE")
+        res = parallel_sol(init_result, mytensor, formula, smt_logic)
+        print("sat" if res else "NONE")
 
 
 if __name__ == "__main__":
-    T1 = time.process_time()
+    T1 = time.perf_counter()
     args = parse_args()
     solve(args.path)
     if DEBUG:
-        print(time.process_time()-T1)
+        print(time.perf_counter()-T1)

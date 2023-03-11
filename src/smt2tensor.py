@@ -298,7 +298,7 @@ class myTensor(object):
                 result.add(min_elem)
 
         # print(subsets, result)
-        return [(key, val) for (key, val, grad) in initval if self.namemap[key][0] not in result]
+        return [(key, float(val)) for (key, val, grad) in initval if self.namemap[key][0] not in result]
 
     def print_args(self, mss=None):
         if mss:
