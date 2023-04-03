@@ -182,30 +182,48 @@ class myTensor(object):
     def __and(self, args):
         y = self.zeros
         for arg in args:
+            if torch.all(self.tensor_args[arg] == self.falses):
+                return self.falses
+            if torch.all(self.tensor_args[arg] == self.trues):
+                continue
             y = y + torch.max(self.zeros, self.tensor_args[arg])
         return y
 
     def __or(self, args):
         y = None
         for arg in args:
+            if torch.all(self.tensor_args[arg] == self.trues):
+                return self.trues
+            if torch.all(self.tensor_args[arg] == self.falses):
+                continue
             if y is not None:
                 y = torch.min(y, self.tensor_args[arg])
             else:
                 y = self.tensor_args[arg]
+        if y is None:
+            y = self.falses
         return y
 
     def __not(self, args):
-        return - self.tensor_args[args[0]]
+        return -self.tensor_args[args[0]]
 
     def __implies(self, args):       # left -> right
         # return a<0?b:-a
         _a = -self.tensor_args[args[0]]
         _b = self.tensor_args[args[1]]
-        return torch.where(_a > 0, _b, _a)
+        return torch.where(_a < 0, _b, -_a)
 
     def __iff(self, args):           # left <-> right
         _a = self.tensor_args[args[0]]
         _b = self.tensor_args[args[1]]
+        if torch.all(_a == self.trues):
+            return _b
+        elif torch.all(_a == self.falses):
+            return -_b
+        elif torch.all(_b == self.trues):
+            return _a
+        elif torch.all(_b == self.falses):
+            return -_a
         return torch.where(_a > 0, -_b, _b)+torch.where(_b > 0, -_a, _a)
 
     def __plus(self, args):
@@ -234,7 +252,7 @@ class myTensor(object):
         return self.tensor_args[args[0]] - self.tensor_args[args[1]]
 
     def __lt(self, args):
-        return self.__le(args)
+        return self.tensor_args[args[0]] - self.tensor_args[args[1]]
 
     def __ite(self, args):       # if( iff ) then  left  else  right
         raise Smtworkerror("qwq")
@@ -242,6 +260,8 @@ class myTensor(object):
     def init_val(self, dim=1):
         self.zeros = torch.zeros(dim, dtype=torch.float)
         self.ones = torch.ones(dim, dtype=torch.float)
+        self.trues = torch.full((dim,), float('-inf'))
+        self.falses = torch.full((dim,), float('inf'))
         tmp_list = []
         for name in self.names:
             nid = self.namemap[name][0]
@@ -255,6 +275,25 @@ class myTensor(object):
         for i in range(l):
             self.tensor_args[i] = self.vars[i]
 
+    def pre_sol(self):                      # 化简常量
+        for layer in reversed(self.task_graph):
+            for oper in layer:
+                fun = oper[0]
+                ts = fun(oper[2])
+                if fun not in (self.__equals, self.__le, self.__lt) or not torch.allclose(ts, ts[0]):
+                    self.tensor_args[oper[1]] = ts
+                    continue
+                print("!")
+                # 都是一个值的话基本说明变量改变无影响，因此说明这里是常量
+                if fun == self.__equals:
+                    self.tensor_args[oper[1]] = self.trues if ts[0] == 0.0 else self.falses
+                elif fun == self.__le:
+                    self.tensor_args[oper[1]] = self.trues if ts[0] <= 0.0 else self.falses
+                elif fun == self.__lt:
+                    self.tensor_args[oper[1]] = self.trues if ts[0] < 0.0 else self.falses
+
+        return self.tensor_args[self.answer_id]
+
     def sol(self):
         for layer in reversed(self.task_graph):
             for oper in layer:
@@ -264,6 +303,10 @@ class myTensor(object):
         return self.tensor_args[self.answer_id]
 
     def run(self, initval):
+        self.zeros = torch.zeros(1, dtype=torch.float)
+        self.ones = torch.ones(1, dtype=torch.float)
+        self.trues = torch.full((1,), float('-inf'))
+        self.falses = torch.full((1,), float('inf'))
         grads = {}
         for (key, val, grad) in initval:
             nid = self.namemap[key][0]

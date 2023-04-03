@@ -11,7 +11,7 @@ import gmpy2
 from smt2tensor import myTensor
 
 
-DEBUG = False
+DEBUG = True
 DIM = 1024
 Z3TIMELIMIT = 20000     # ms
 ITERTIMELIMIT = 600     # s
@@ -67,10 +67,10 @@ def generate_init_solution(mytensor):
     init_result = {}
     mytensor.init_val(DIM)
     T1 = time.process_time()
-    y = mytensor.sol()
+    y = mytensor.pre_sol()  # 化简常量，顺便记录sol时间
     T2 = time.process_time()
-    if T2-T1 > 1:
-        new_epochs = int(ITERTIMELIMIT*0.45/(T2-T1))
+    if T2-T1 > 0.8:
+        new_epochs = int(ITERTIMELIMIT*0.5/(T2-T1))
         Lr *= new_epochs/Epochs
         Epochs = new_epochs
 
