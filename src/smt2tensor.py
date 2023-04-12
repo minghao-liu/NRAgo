@@ -8,6 +8,7 @@ import torch
 import random
 import math
 import collections
+import networkx as nx
 
 
 class Smtworkerror(RuntimeError):
@@ -70,7 +71,7 @@ class myTensor(object):
     def parse_assert(self, node):
         self.nodes.append(node)
 
-    def make_not_node(self, node, layer, dim):
+    def make_not_node(self, node, layer, dim, is_and):
         if layer > self.task_layer_cnt:
             self.task_layer_cnt += 1
             self.task_graph.append([])
@@ -82,16 +83,18 @@ class myTensor(object):
         self.task_graph[layer].append(
             [self.__commands[type], self.arg_cnt, tmp_list])
         self.task_set[self.arg_cnt] = tmp_set
+        if is_and and tmp_set:
+            self.and_task.append(self.arg_cnt)
         self.arg_cnt += 1
         return self.arg_cnt-1
 
     def init_graph(self, node, layer, dim, is_not, is_and=0):
         if node.is_not():               # 下传not
             is_not ^= 1
-            return self.init_graph(node.arg(0), layer, dim, is_not)
+            return self.init_graph(node.arg(0), layer, dim, is_not, is_and)
         if is_not:
             if node.is_symbol() or node.is_constant() or node.is_equals():
-                return self.make_not_node(node, layer, dim)
+                return self.make_not_node(node, layer, dim, is_and)
 
         if node.is_symbol():          # 符号
             return self.namemap[node.symbol_name()][0]
@@ -152,7 +155,7 @@ class myTensor(object):
         for tid in tmp_list:
             tmp_set = tmp_set | self.task_set[tid]
         self.task_set[self.arg_cnt] = tmp_set
-        if is_and and self.and_task.count(tmp_list[0]) == 0:
+        if is_and and type != AND and tmp_set:
             self.and_task.append(self.arg_cnt)
         self.arg_cnt += 1
         return self.arg_cnt-1
@@ -320,25 +323,41 @@ class myTensor(object):
 
         subsets = [self.task_set[tid]
                    for tid in self.and_task if self.tensor_args[tid][0] > 0]
-        subsets = sorted(subsets, key=len)
-        counter = collections.Counter(
-            elem for subset in subsets for elem in subset)
-        result = set()
-
+        if len(subsets) == 0:
+            return [(key, float(val)) for (key, val, grad) in initval]
+        vars = set()
         for subset in subsets:
-            min_elem = None
-            for id in subset:
-                if id in result:
-                    continue
-                if min_elem is None or counter[min_elem] > counter[id] or (counter[min_elem] == counter[id] and grads[min_elem] > grads[id]):
-                    min_elem = id
+            vars |= subset
+        funcs = [(i,) for i in range(len(subsets))]
+        vars = list(vars)
+        B = nx.Graph()          # 二分图最大匹配
+        B.add_nodes_from(funcs, bipartite=0)
+        B.add_nodes_from(vars, bipartite=1)
+        for i,subset in enumerate(subsets):
+            for var in subset:
+                B.add_edge((i,), var)
+        matching = nx.algorithms.bipartite.maximum_matching(B, top_nodes = funcs)
+        result = [matching[subset] for subset in funcs if subset in matching]
 
-                counter[id] -= 1
-                if counter[id] == 0:
-                    del counter[id]
-            # print(min_elem)
-            if min_elem is not None:
-                result.add(min_elem)
+        # subsets = sorted(subsets, key=len)
+        # counter = collections.Counter(
+        #     elem for subset in subsets for elem in subset)
+        # result = set()
+
+        # for subset in subsets:
+        #     min_elem = None
+        #     for id in subset:
+        #         if id in result:
+        #             continue
+        #         if min_elem is None or counter[min_elem] > counter[id] or (counter[min_elem] == counter[id] and grads[min_elem] > grads[id]):
+        #             min_elem = id
+
+        #         counter[id] -= 1
+        #         if counter[id] == 0:
+        #             del counter[id]
+        #     # print(min_elem)
+        #     if min_elem is not None:
+        #         result.add(min_elem)
 
         # print(subsets, result)
         return [(key, float(val)) for (key, val, grad) in initval if self.namemap[key][0] not in result]
