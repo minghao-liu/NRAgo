@@ -333,10 +333,10 @@ class myTensor(object):
         B = nx.Graph()          # 二分图最大匹配
         B.add_nodes_from(funcs, bipartite=0)
         B.add_nodes_from(vars, bipartite=1)
-        for i,subset in enumerate(subsets):
+        for i, subset in enumerate(subsets):
             for var in subset:
                 B.add_edge((i,), var)
-        matching = nx.algorithms.bipartite.maximum_matching(B, top_nodes = funcs)
+        matching = nx.algorithms.bipartite.maximum_matching(B, top_nodes=funcs)
         result = [matching[subset] for subset in funcs if subset in matching]
 
         # subsets = sorted(subsets, key=len)

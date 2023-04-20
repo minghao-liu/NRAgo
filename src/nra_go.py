@@ -12,6 +12,7 @@ from smt2tensor import myTensor
 
 
 DEBUG = True
+CPUNUMS = 4
 DIM = 1024
 Z3TIMELIMIT = 20000     # ms
 ITERTIMELIMIT = 600     # s
@@ -175,7 +176,7 @@ def make_ignore(init_result, formula, smt_logic, mytensor):
 
 def parallel_sol(init_result, mytensor, formula, smt_logic):
     # make_ignore(init_result, formula, smt_logic, mytensor)
-    with ProcessPoolExecutor() as executor:
+    with ProcessPoolExecutor(max_workers=CPUNUMS) as executor:
         futures = []
         for i in range(DIM):
             init_val = []
