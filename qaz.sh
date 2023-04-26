@@ -34,13 +34,14 @@ function parallel() {
         if [ $state -eq 0 ];then
             for i in $folder/*; do
                 echo $i
-                read -u9
-                {
-                    python3 src/nra_go.py $i > results/$i
-                    sleep 1
-                    #控制进程数：一个任务完成后，写入一个空格字符到管道，新的任务将可以执行
-                    echo >&9
-                }&
+                python3 src/nra_go.py $i > results/$i
+                # read -u9
+                # {
+                #     python3 src/nra_go.py $i > results/$i
+                #     sleep 1
+                #     #控制进程数：一个任务完成后，写入一个空格字符到管道，新的任务将可以执行
+                #     echo >&9
+                # }&
             done
         fi
         if [ $state -eq 1 ];then

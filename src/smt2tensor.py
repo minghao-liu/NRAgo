@@ -286,7 +286,6 @@ class myTensor(object):
                 if fun not in (self.__equals, self.__le, self.__lt) or not torch.allclose(ts, ts[0]):
                     self.tensor_args[oper[1]] = ts
                     continue
-                print("!")
                 # 都是一个值的话基本说明变量改变无影响，因此说明这里是常量
                 if fun == self.__equals:
                     self.tensor_args[oper[1]] = self.trues if ts[0] == 0.0 else self.falses
@@ -336,9 +335,11 @@ class myTensor(object):
         for i, subset in enumerate(subsets):
             for var in subset:
                 B.add_edge((i,), var)
-        matching = nx.algorithms.bipartite.maximum_matching(B, top_nodes=funcs)
-        result = [matching[subset] for subset in funcs if subset in matching]
-
+        try:
+            matching = nx.algorithms.bipartite.maximum_matching(B, top_nodes=funcs)
+            result = [matching[subset] for subset in funcs if subset in matching]
+        except:
+            result = []
         # subsets = sorted(subsets, key=len)
         # counter = collections.Counter(
         #     elem for subset in subsets for elem in subset)

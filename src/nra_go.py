@@ -9,19 +9,24 @@ import torch
 import math
 import gmpy2
 from smt2tensor import myTensor
+from tqdm import tqdm
 
 
-DEBUG = True
+DEBUG = False
+MAXWORKERS = 5         # ProcessPoolExecutor default None
 DIM = 1024
 Z3TIMELIMIT = 20000     # ms
 ITERTIMELIMIT = 600     # s
 Epochs = 600
 Lr = 0.5
+USEEPS = False
+EPS = 0.0001
 
 
 def parse_args():
     arg_parser = argparse.ArgumentParser(description='SMT_GD')
     arg_parser.add_argument('path', type=str, help='path of smt-lib file')
+    arg_parser.add_argument("--debug", action="store_true", help="开启调试模式")
     args_get = arg_parser.parse_args()
     return args_get
 
@@ -31,13 +36,13 @@ def get_smt_script(path):
     with open(path, 'r') as fp:
         script_get = smt_parser.get_script(fp)
         smt_logic = smt_parser.logic
-        return script_get, smt_logic
+    return script_get, smt_logic
 
 
 def get_smt_formula(path):
     with open(path, 'r') as fp:
         f = get_formula(fp)
-        return f
+    return f
 
 
 def adjust_learning_rate(optimizer, epoch, lr):
@@ -79,7 +84,7 @@ def generate_init_solution(mytensor):
         print(Epochs)
 
     optimizer = torch.optim.Adam([mytensor.vars], lr=Lr)
-    for step in range(Epochs):
+    for step in tqdm(range(Epochs)) if DEBUG else range(Epochs):
         adjust_learning_rate(optimizer, step, Lr)
         optimizer.zero_grad()
         y = mytensor.sol()
@@ -124,24 +129,30 @@ def approx_x(x):
 
 
 def z3sol_with_val(formula, smt_logic, namemap, init_result):
+    res = z3.unknown
     with Solver("z3") as s:
         s.z3.set("timeout", Z3TIMELIMIT)       # ms
         s.add_assertion(formula)
         for (key, value) in init_result:
             if namemap[key][1]:        # Real
-                x = float(format(value, '.2g'))
-                if abs(x) < 1e-5:
-                    x = 0
-                # else:
-                #     x = approx_x(value)
-                s.z3.add(z3.Real(key) == x)
+                if USEEPS:
+                    lx = value - EPS
+                    rx = value + EPS
+                    s.z3.add(z3.Real(key) > lx)
+                    s.z3.add(z3.Real(key) < rx)
+                else:
+                    x = float(format(value, '.2g'))
+                    if abs(x) < 1e-5:
+                        x = 0
+                    # else:
+                    #     x = approx_x(value)
+                    s.z3.add(z3.Real(key) == x)
             else:                              # Bool
                 if value > 0:
                     s.z3.add(z3.Not(z3.Bool(key)))
                 else:
                     s.z3.add(z3.Bool(key))
         res = s.z3.check()
-        s.z3.reset()
     if DEBUG:
         print(res)
     return res == z3.sat
@@ -175,7 +186,8 @@ def make_ignore(init_result, formula, smt_logic, mytensor):
 
 def parallel_sol(init_result, mytensor, formula, smt_logic):
     # make_ignore(init_result, formula, smt_logic, mytensor)
-    with ProcessPoolExecutor() as executor:
+    res = False
+    with ProcessPoolExecutor(max_workers=MAXWORKERS) as executor:
         futures = []
         for i in range(DIM):
             init_val = []
@@ -189,14 +201,24 @@ def parallel_sol(init_result, mytensor, formula, smt_logic):
                 z3sol_with_val, formula, smt_logic, mytensor.namemap, init_val)
             futures.append(future)
 
+        timelimit = Z3TIMELIMIT*1.1/1000
         for future in futures:
-            if future.result():
+            try:
+                fresult = future.result(timeout=timelimit)
+            except:
+                if DEBUG:
+                    print('TLE')
+                if not future.done():
+                    future.cancel()
+                fresult = False
+            if fresult:
                 # if one of the functions returns True, cancel the remaining functions
                 for f in futures:
                     if not f.done():
                         f.cancel()
-                return True
-    return False
+                res = True
+                break
+    return res
 
 
 def solve(path):
@@ -216,6 +238,7 @@ def solve(path):
 if __name__ == "__main__":
     T1 = time.perf_counter()
     args = parse_args()
+    DEBUG = args.debug
     solve(args.path)
     if DEBUG:
         print(time.perf_counter()-T1)
