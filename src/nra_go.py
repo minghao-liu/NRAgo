@@ -1,7 +1,7 @@
 from pysmt.smtlib.parser import SmtLibParser, get_formula
 import pysmt.smtlib.commands as smtcmd
 from pysmt.shortcuts import Solver
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import argparse
 import time
 import z3
@@ -15,7 +15,8 @@ from tqdm import tqdm
 DEBUG = False
 MAXWORKERS = 5         # ProcessPoolExecutor default None
 DIM = 1024
-Z3TIMELIMIT = 20000     # ms
+Z3TIMELIMIT = 5000     # ms
+PROCESSTIMELIMIT = Z3TIMELIMIT*1.1/1000
 ITERTIMELIMIT = 600     # s
 Epochs = 600
 Lr = 0.5
@@ -158,6 +159,19 @@ def z3sol_with_val(formula, smt_logic, namemap, init_result):
     return res == z3.sat
 
 
+def z3sol_protect(formula, smt_logic, namemap, init_result):
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        try:
+            future = executor.submit(
+                z3sol_with_val, formula, smt_logic, namemap, init_result)
+            result = future.result(timeout=PROCESSTIMELIMIT)
+        except:
+            if not future.done():
+                future.cancel()
+            result = False
+    return result
+
+
 def make_ignore(init_result, formula, smt_logic, mytensor):
     ignore = 0
     init_val = []
@@ -198,7 +212,7 @@ def parallel_sol(init_result, mytensor, formula, smt_logic):
             init_val = mytensor.run(init_val)
 
             future = executor.submit(
-                z3sol_with_val, formula, smt_logic, mytensor.namemap, init_val)
+                z3sol_protect, formula, smt_logic, mytensor.namemap, init_val)
             futures.append(future)
 
         timelimit = Z3TIMELIMIT*1.1/1000
