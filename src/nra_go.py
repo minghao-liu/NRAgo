@@ -2,6 +2,7 @@ from pysmt.smtlib.parser import SmtLibParser, get_formula
 import pysmt.smtlib.commands as smtcmd
 from pysmt.shortcuts import Solver
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+import networkx as nx
 import argparse
 import time
 import z3
@@ -13,10 +14,11 @@ from tqdm import tqdm
 
 
 DEBUG = False
-MAXWORKERS = 5         # ProcessPoolExecutor default None
+MAXWORKERS = 5         # ProcessPoolExecutor default is None
 DIM = 1024
-Z3TIMELIMIT = 5000     # ms
-PROCESSTIMELIMIT = Z3TIMELIMIT*1.1/1000
+Z3TIMELIMIT = 10000     # ms
+THREADTIMELIMIT = Z3TIMELIMIT/1000
+PROCESSTIMELIMIT = THREADTIMELIMIT + 1
 ITERTIMELIMIT = 600     # s
 Epochs = 600
 Lr = 0.5
@@ -159,12 +161,33 @@ def z3sol_with_val(formula, smt_logic, namemap, init_result):
     return res == z3.sat
 
 
-def z3sol_protect(formula, smt_logic, namemap, init_result):
+def z3sol_protect(formula, smt_logic, namemap, init_result, subsets):
+    if len(subsets) > 0:
+        vars = set()
+        for subset in subsets:
+            vars |= subset
+        funcs = [(i,) for i in range(len(subsets))]
+        vars = list(vars)
+        B = nx.Graph()          # 二分图最大匹配
+        B.add_nodes_from(funcs, bipartite=0)
+        B.add_nodes_from(vars, bipartite=1)
+        for i, subset in enumerate(subsets):
+            for var in subset:
+                B.add_edge((i,), var)
+        try:
+            matching = nx.algorithms.bipartite.maximum_matching(
+                B, top_nodes=funcs)
+            result = [matching[subset]
+                      for subset in funcs if subset in matching]
+        except:
+            result = []
+        init_result = [(key, val) for (key, val)
+                       in init_result if namemap[key][0] not in result]
     with ThreadPoolExecutor(max_workers=1) as executor:
         try:
             future = executor.submit(
                 z3sol_with_val, formula, smt_logic, namemap, init_result)
-            result = future.result(timeout=PROCESSTIMELIMIT)
+            result = future.result(timeout=THREADTIMELIMIT)
         except:
             if not future.done():
                 future.cancel()
@@ -172,53 +195,35 @@ def z3sol_protect(formula, smt_logic, namemap, init_result):
     return result
 
 
-def make_ignore(init_result, formula, smt_logic, mytensor):
-    ignore = 0
-    init_val = []
-    for key, (vals, grads) in init_result.items():
-        value = vals[0]
-        grad = grads[0]
-        init_val.append((key, value.float(), grad))
-
-    for i in range(min(12, 2+(len(init_result)//5))):
-        ignore += 1
-        T1 = time.process_time()
-        t_val = init_val[ignore:]
-        res = z3sol_with_val(formula, smt_logic, mytensor.namemap, t_val)
-        T2 = time.process_time()
-        if T2-T1 > 2:
-            ignore -= 1
-            break
-    if ignore > len(init_result):
-        ignore = len(init_result)
-    if ignore == 0:
-        ignore = 1
-
-    if DEBUG:
-        print(ignore)
-
-
 def parallel_sol(init_result, mytensor, formula, smt_logic):
-    # make_ignore(init_result, formula, smt_logic, mytensor)
     res = False
     with ProcessPoolExecutor(max_workers=MAXWORKERS) as executor:
+        init_vals = [[] for _ in range(DIM)]
+        for key_, (vals_, grads_) in init_result.items():
+            values = []
+            for i in range(DIM):
+                val = vals_[i].float()
+                if mytensor.namemap[key_][1]:       # Real
+                    val = float(format(val, '.2g'))
+                    if abs(val) < 1e-5:
+                        val = 0
+                init_vals[i].append((key_, val))
+                values.append(val)
+            nid = mytensor.namemap[key_][0]
+            mytensor.tensor_args[nid] = torch.tensor(values)
+        mytensor.sol()
+
         futures = []
         for i in range(DIM):
-            init_val = []
-            for key, (vals, grads) in init_result.items():
-                value = vals[i]
-                grad = grads[i]
-                init_val.append((key, value.float(), grad))
-            init_val = mytensor.run(init_val)
-
+            subsets = [mytensor.task_set[tid]
+                       for tid in mytensor.and_task if mytensor.tensor_args[tid][i] > 0]
             future = executor.submit(
-                z3sol_protect, formula, smt_logic, mytensor.namemap, init_val)
+                z3sol_protect, formula, smt_logic, mytensor.namemap, init_vals[i], subsets)
             futures.append(future)
 
-        timelimit = Z3TIMELIMIT*1.1/1000
         for future in futures:
             try:
-                fresult = future.result(timeout=timelimit)
+                fresult = future.result(timeout=PROCESSTIMELIMIT)
             except:
                 if DEBUG:
                     print('TLE')

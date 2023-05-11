@@ -34,7 +34,11 @@ function parallel() {
         if [ $state -eq 0 ];then
             for i in $folder/*; do
                 echo $i
-                python3 src/nra_go.py $i > results/$i
+                start=$[$(date +%s%N)/1000000]
+                timeout 1800 python3 src/nra_go.py $i > results/$i
+                end=$[$(date +%s%N)/1000000]
+                take=$(( end - start ))
+                echo $i , ${take} ms >> times.csv
                 # read -u9
                 # {
                 #     python3 src/nra_go.py $i > results/$i
