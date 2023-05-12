@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 
 DEBUG = False
-MAXWORKERS = 5         # ProcessPoolExecutor default is None
+MAXWORKERS = None       # ProcessPoolExecutor default is None
 DIM = 1024
 Z3TIMELIMIT = 10000     # ms
 THREADTIMELIMIT = Z3TIMELIMIT/1000
@@ -29,7 +29,8 @@ EPS = 0.0001
 def parse_args():
     arg_parser = argparse.ArgumentParser(description='SMT_GD')
     arg_parser.add_argument('path', type=str, help='path of smt-lib file')
-    arg_parser.add_argument("--debug", action="store_true", help="开启调试模式")
+    arg_parser.add_argument("-D", "--debug", action="store_true", help="enable debug mode")
+    arg_parser.add_argument("-W", "--workers", type=int, default=None, help="number of parallel workers")
     args_get = arg_parser.parse_args()
     return args_get
 
@@ -258,6 +259,8 @@ if __name__ == "__main__":
     T1 = time.perf_counter()
     args = parse_args()
     DEBUG = args.debug
+    MAXWORKERS = args.workers
+    
     solve(args.path)
     if DEBUG:
         print(time.perf_counter()-T1)

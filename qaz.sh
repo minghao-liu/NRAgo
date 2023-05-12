@@ -1,5 +1,6 @@
 #!/bin/bash
 THREAD_NUM=6
+workers=20
 
 #指定分隔符
 IFS='
@@ -35,7 +36,7 @@ function parallel() {
             for i in $folder/*; do
                 echo $i
                 start=$[$(date +%s%N)/1000000]
-                timeout 1800 python3 src/nra_go.py $i > results/$i
+                timeout 1800 python3 src/nra_go.py $i > results/$i -W $workers
                 end=$[$(date +%s%N)/1000000]
                 take=$(( end - start ))
                 echo $i , ${take} ms >> times.csv
