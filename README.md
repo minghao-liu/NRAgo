@@ -22,3 +22,5 @@ There are some dependent packages:
 
 Like most other SMT solvers, NRAgo accepts a text file in the SMT-LIB format (e.g., `input.smt2`) as input. Run the following command to solve:
 `python3 nrago.py input.smt2`
+
+Please try the benchmarks in the `examples` folder to test the performance.
