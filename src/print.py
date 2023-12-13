@@ -52,22 +52,29 @@ def get_smt_formula(path):
 
 parameter_val={}
 def generate_parameter(declaration):
-    val = parameter_val[declaration.strip()]
-    return f"{val[0]} {val[1]}"
+    outstr = ""
+    data = parameter_val[declaration.strip()]
+    for (a,b,c) in data:
+        outstr += f" {a} {b} {c}"
+    return outstr
 
-def MyPrint(init_result, outtime):
+def MyPrint(init_result, cluster_stats, N, outtime):
     global parameter_val
+    id_ = 0
     for key_, (vals_, grads_) in init_result.items():
-        data = vals_
-        mean = np.mean(data)
-        std = np.std(data)
-        val = (float(format(mean, '.2g')), float(format(std, '.2g')))
-        parameter_val[key_]=val
+        data = []
+        for i in range(N):
+            min_ = format(cluster_stats[i][0][id_], '.2g')
+            max_ = format(cluster_stats[i][1][id_], '.2g')
+            cnt_ = str(cluster_stats[i][2])
+            data.append((min_, max_, cnt_))
+        parameter_val[key_] = data
+        id_+=1
 
     with open(mypath, 'r') as file:
         smt2_content = file.read()
-    smt2_content = re.sub(r'(declare-fun (.+?)\(\) Real)', lambda m: f'{m.group(0)} GD {generate_parameter(m.group(2))}', smt2_content)
-    smt2_content = re.sub(r'(declare-const (.+?) Real)', lambda m: f'{m.group(0)} GD {generate_parameter(m.group(2))}', smt2_content)
+    smt2_content = re.sub(r'(declare-fun (.+?)\(\) Real)', lambda m: f'{m.group(0)} GD {N}{generate_parameter(m.group(2))}', smt2_content)
+    smt2_content = re.sub(r'(declare-const (.+?) Real)', lambda m: f'{m.group(0)} GD {N}{generate_parameter(m.group(2))}', smt2_content)
     # print(smt2_content)
 
     file_path = str(outtime)+"/"+ mypath
@@ -173,7 +180,10 @@ def generate_init_solution(mytensor):
     # print("")
     # MyPrint(init_result,_out_cnt)
     
-    clustering(init_result, 30)
+    N = 30
+    cluster_stats = clustering(init_result, N)
+    MyPrint(init_result, cluster_stats, N, _out_cnt)
+
 
     return init_result
 
