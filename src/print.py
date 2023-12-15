@@ -64,8 +64,8 @@ def MyPrint(init_result, cluster_stats, N, outtime):
     for key_, (vals_, grads_) in init_result.items():
         data = []
         for i in range(N):
-            min_ = format(cluster_stats[i][0][id_], '.2g')
-            max_ = format(cluster_stats[i][1][id_], '.2g')
+            min_ = format(cluster_stats[i][0][id_], 'f')
+            max_ = format(cluster_stats[i][1][id_], 'f')
             cnt_ = str(cluster_stats[i][2])
             data.append((min_, max_, cnt_))
         parameter_val[key_] = data
@@ -160,12 +160,12 @@ def generate_init_solution(mytensor):
             
 
         T2 = time.process_time()
-        if T2-T1 > 100 and _out_cnt == 100:
-            # MyPrint(init_result,_out_cnt)
-            _out_cnt=300
-        elif T2-T1 > 300 and _out_cnt == 300:
-            # MyPrint(init_result,_out_cnt)
-            _out_cnt=600
+        # if T2-T1 > 100 and _out_cnt == 100:
+        #     # MyPrint(init_result,_out_cnt)
+        #     _out_cnt=300
+        # elif T2-T1 > 300 and _out_cnt == 300:
+        #     # MyPrint(init_result,_out_cnt)
+        #     _out_cnt=600
 
 
         if torch.any(y < torch.zeros(DIM)):

@@ -17,9 +17,9 @@ done
 
 function parallel() {
     for folder in $@/*;do 
-        if [ ! -d results/$folder ];then
-            mkdir results/$folder
-        fi
+        # if [ ! -d results/$folder ];then
+        #     mkdir results/$folder
+        # fi
         state=-1
         for file in $folder/*;do
             if test -f $file;then
